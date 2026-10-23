@@ -8,4 +8,5 @@ openai>=2.0.0,<3.0.0
 python-multipart>=0.0.12,<1.0.0
 pillow>=10.4.0
 faster-whisper>=1.0.0
+edge-tts>=7.0.0
 

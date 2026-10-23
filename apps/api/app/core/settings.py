@@ -25,6 +25,8 @@ class AppSettings(BaseModel):
     higgsfield_api_key: str = ""
     pexels_api_key: str = ""
     qwen3_tts_base_url: str = "http://127.0.0.1:7860"
+    tts_provider: str = "edge"
+    edge_tts_voice: str = "ko-KR-SunHiNeural"
     reference_voice_path: str = "assets/reference_voice/reference_voice.mp3"
     reference_voice_text: str = (
         "안녕하세요 여러분. 반갑습니다. 오늘도 저희 채널을 찾아주셔서 감사합니다. "
@@ -61,6 +63,8 @@ ENV_TO_FIELD = {
     "HIGGSFIELD_API_KEY": "higgsfield_api_key",
     "PEXELS_API_KEY": "pexels_api_key",
     "QWEN3_TTS_BASE_URL": "qwen3_tts_base_url",
+    "TTS_PROVIDER": "tts_provider",
+    "EDGE_TTS_VOICE": "edge_tts_voice",
     "REFERENCE_VOICE_PATH": "reference_voice_path",
     "REFERENCE_VOICE_TEXT": "reference_voice_text",
     "BGM_PATH": "bgm_path",

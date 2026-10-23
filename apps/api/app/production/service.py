@@ -133,6 +133,21 @@ def _get_audio_duration(file_path: Path) -> float:
     return 0.0
 
 
+def _generate_edge_tts(project_dir: Path, script_text: str, settings: AppSettings) -> Path:
+    import asyncio
+    import edge_tts
+
+    temp_mp3 = project_dir / "temp_tts_raw.mp3"
+    rate = f"{round((SPEED_RATE - 1) * 100):+d}%"
+    asyncio.run(edge_tts.Communicate(script_text, settings.edge_tts_voice, rate=rate).save(str(temp_mp3)))
+    final_wav = project_dir / TTS_AUDIO_FILENAME
+    try:
+        _change_audio_speed(temp_mp3, final_wav, rate=1.0)
+    finally:
+        temp_mp3.unlink(missing_ok=True)
+    return final_wav
+
+
 def generate_tts_for_project(project_dir: Path, settings: AppSettings) -> Path:
     final_script_path = project_dir / "final_script.md"
     if not final_script_path.exists():
@@ -141,6 +156,9 @@ def generate_tts_for_project(project_dir: Path, settings: AppSettings) -> Path:
     script_text = final_script_path.read_text(encoding="utf-8").strip()
     if not script_text:
         raise ValueError("final_script.md 대본 내용이 비어 있습니다.")
+
+    if settings.tts_provider == "edge":
+        return _generate_edge_tts(project_dir, script_text, settings)
 
     repo_root = find_repo_root()
     ref_voice_path = Path(settings.reference_voice_path)
