@@ -844,7 +844,7 @@ def _run_higgsfield_generate(
         raise RuntimeError(f"Higgsfield 출력 파싱 실패: {res.stdout}") from exc
 
 
-FREE_VIDEO_MODELS = ("pexels", "kenburns")
+FREE_VIDEO_MODELS = ("stock", "kenburns")
 _STOCK_STOPWORDS = {
     "the", "and", "with", "for", "from", "into", "onto", "that", "this", "very", "style", "vertical",
     "portrait", "scene", "cinematic", "claymation", "clay", "plasticine", "texture", "cute", "render",
@@ -859,21 +859,40 @@ def _stock_query(prompt: str) -> str:
     return " ".join(words[:4]) or "abstract background"
 
 
-def _pexels_search(settings: AppSettings, kind: str, query: str) -> list[dict]:
-    if not settings.pexels_api_key:
-        raise RuntimeError("PEXELS_API_KEY가 설정되지 않았습니다. https://www.pexels.com/api/ 에서 무료로 발급받아 .env에 넣어주세요.")
-    path = "v1/search" if kind == "photos" else "videos/search"
-    resp = httpx.get(
-        f"https://api.pexels.com/{path}",
-        params={"query": query, "orientation": "portrait", "per_page": 15},
-        headers={"Authorization": settings.pexels_api_key},
-        timeout=30.0,
-    )
+def _http_json(url: str, params: dict, headers: dict | None = None) -> dict:
+    resp = httpx.get(url, params=params, headers=headers or {}, timeout=30.0)
     resp.raise_for_status()
-    results = resp.json().get(kind, [])
-    if not results:
-        raise RuntimeError(f"Pexels에서 '{query}' 검색 결과가 없습니다. 씬 프롬프트를 수정해보세요.")
-    return results
+    return resp.json()
+
+
+def _stock_media_url(settings: AppSettings, kind: str, query: str, pick: int) -> str:
+    """kind is "photo" or "video"; returns a downloadable URL for a portrait-friendly result."""
+    if settings.pixabay_api_key:
+        base = "https://pixabay.com/api/" + ("videos/" if kind == "video" else "")
+        params = {"key": settings.pixabay_api_key, "q": query, "safesearch": "true", "per_page": 20}
+        if kind == "photo":
+            params.update(orientation="vertical", image_type="photo")
+        hits = _http_json(base, params).get("hits", [])
+        if kind == "photo":
+            urls = [h["largeImageURL"] for h in hits]
+        else:
+            # Pixabay has no orientation filter for videos; prefer portrait clips, otherwise crop landscape.
+            hits.sort(key=lambda h: h["videos"]["medium"]["height"] <= h["videos"]["medium"]["width"])
+            urls = [max((v for v in h["videos"].values() if v.get("url")), key=lambda v: v["height"])["url"] for h in hits]
+    elif settings.pexels_api_key:
+        path = "v1/search" if kind == "photo" else "videos/search"
+        data = _http_json(f"https://api.pexels.com/{path}", {"query": query, "orientation": "portrait", "per_page": 15},
+                          {"Authorization": settings.pexels_api_key})
+        if kind == "photo":
+            urls = [p["src"]["portrait"] for p in data.get("photos", [])]
+        else:
+            urls = [min((f for f in v["video_files"] if f.get("height")), key=lambda f: abs(f["height"] - 1920))["link"]
+                    for v in data.get("videos", [])]
+    else:
+        raise RuntimeError("무료 스톡 키가 없습니다. https://pixabay.com/api/docs/ 에서 키를 받아 .env의 PIXABAY_API_KEY에 넣어주세요.")
+    if not urls:
+        raise RuntimeError(f"스톡 검색 결과가 없습니다: '{query}'. 씬 프롬프트를 수정해보세요.")
+    return urls[pick % len(urls)]
 
 
 def _download(url: str, target: Path) -> None:
@@ -887,12 +906,9 @@ def _make_free_scene_video(
     image_path: Path, video_path: Path, duration: int,
 ) -> None:
     vf_fit = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-    if model_name == "pexels":
-        videos = _pexels_search(settings, "videos", _stock_query(prompt))
-        files = [f for f in videos[(scene_id - 1) % len(videos)]["video_files"] if f.get("height")]
-        best = min(files, key=lambda f: abs(f["height"] - 1920))
+    if model_name == "stock":
         stock_path = video_path.with_name(f"scene_{scene_id:02d}_stock.mp4")
-        _download(best["link"], stock_path)
+        _download(_stock_media_url(settings, "video", _stock_query(prompt), scene_id - 1), stock_path)
         cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(stock_path), "-t", str(duration),
                "-vf", f"{vf_fit},fps=30", "-an"]
     else:
@@ -946,9 +962,8 @@ def generate_scene_image_for_project(
         except Exception:
             pass
 
-    if model_name == "pexels":
-        photos = _pexels_search(settings, "photos", _stock_query(prompt))
-        _download(photos[(scene_id - 1) % len(photos)]["src"]["portrait"], start_image_path)
+    if model_name == "stock":
+        _download(_stock_media_url(settings, "photo", _stock_query(prompt), scene_id - 1), start_image_path)
         return start_image_path
 
     # 1. 힉스필드 모델 시도 (nano_banana_pro, gpt_image_2, seedream_v5_pro, flux_3_image 등)
@@ -1019,7 +1034,7 @@ def generate_scene_video_for_project(
     scenes_dir.mkdir(parents=True, exist_ok=True)
 
     current_scene_image = scenes_dir / f"scene_{scene_id:02d}_start.png"
-    if not current_scene_image.exists() and model_name != "pexels":
+    if not current_scene_image.exists() and model_name != "stock":
         raise FileNotFoundError(f"Scene {scene_id}의 시작 이미지가 없습니다. 먼저 이미지를 생성해주세요.")
 
     # 🎬 키프레임 연속성 연동 (match_prev_frame):

@@ -13,9 +13,9 @@ export interface ModelOption {
 
 export const IMAGE_MODELS: readonly ModelOption[] = [
   {
-    id: "pexels",
-    name: "Pexels 스톡 사진",
-    provider: "Pexels (무료)",
+    id: "stock",
+    name: "무료 스톡 사진",
+    provider: "Pixabay / Pexels",
     description: "프롬프트 키워드로 무료 세로형 스톡 사진을 검색합니다. GPU·유료 크레딧 불필요",
     badge: "무료",
     badgeType: "free",
@@ -84,9 +84,9 @@ export const VIDEO_MODELS: readonly ModelOption[] = [
     iconType: "stock"
   },
   {
-    id: "pexels",
-    name: "Pexels 스톡 영상",
-    provider: "Pexels (무료)",
+    id: "stock",
+    name: "무료 스톡 영상",
+    provider: "Pixabay / Pexels",
     description: "프롬프트 키워드로 무료 세로형 스톡 영상을 검색해 씬 길이에 맞춥니다",
     badge: "무료",
     badgeType: "free",

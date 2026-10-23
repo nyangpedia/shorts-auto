@@ -25,6 +25,7 @@ class AppSettings(BaseModel):
     youtube_api_key: str = ""
     higgsfield_api_key: str = ""
     pexels_api_key: str = ""
+    pixabay_api_key: str = ""
     qwen3_tts_base_url: str = "http://127.0.0.1:7860"
     tts_provider: str = "gemini"
     gemini_tts_model: str = "gemini-3.8-flash-tts"
@@ -71,6 +72,7 @@ ENV_TO_FIELD = {
     "YOUTUBE_API_KEY": "youtube_api_key",
     "HIGGSFIELD_API_KEY": "higgsfield_api_key",
     "PEXELS_API_KEY": "pexels_api_key",
+    "PIXABAY_API_KEY": "pixabay_api_key",
     "QWEN3_TTS_BASE_URL": "qwen3_tts_base_url",
     "TTS_PROVIDER": "tts_provider",
     "GEMINI_TTS_MODEL": "gemini_tts_model",

@@ -66,3 +66,18 @@ def test_llm_key_prefers_gemini_only_with_base_url():
 
     assert AppSettings(openai_api_key="o", gemini_api_key="g").llm_api_key == "o"
     assert AppSettings(openai_api_key="o", gemini_api_key="g", llm_base_url="u").llm_api_key == "g"
+
+
+def test_stock_prefers_portrait_pixabay_video(monkeypatch):
+    from app.core.settings import AppSettings
+    from app.production import service
+
+    def v(w, h, tag):
+        return {"videos": {"large": {"url": "", "width": 0, "height": 0},
+                           "medium": {"url": f"{tag}-m", "width": w, "height": h},
+                           "small": {"url": f"{tag}-s", "width": w // 2, "height": h // 2}}}
+
+    monkeypatch.setattr(service, "_http_json", lambda url, params, headers=None: {"hits": [v(1920, 1080, "land"), v(1080, 1920, "port")]})
+    s = AppSettings(pixabay_api_key="k")
+    assert service._stock_media_url(s, "video", "q", 0) == "port-m"
+    assert service._stock_media_url(s, "video", "q", 1) == "land-m"

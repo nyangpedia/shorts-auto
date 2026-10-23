@@ -57,7 +57,7 @@ export function ProductionPanel({
   onTitleChange
 }: ProductionPanelProps) {
   const [expandedPromptId, setExpandedPromptId] = useState<number | null>(null);
-  const [imageModel, setImageModel] = useState<string>("pexels");
+  const [imageModel, setImageModel] = useState<string>("stock");
   const [videoModel, setVideoModel] = useState<string>("kenburns");
   const [modalMode, setModalMode] = useState<"image" | "video" | null>(null);
   const [multiShotsMap, setMultiShotsMap] = useState<Record<number, boolean>>({});
