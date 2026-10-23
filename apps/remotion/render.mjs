@@ -10,12 +10,15 @@ async function main() {
   const args = process.argv.slice(2);
   let propsPath = null;
   let outputPath = null;
+  let publicDir = path.resolve(__dirname, "../../");
 
   for (const arg of args) {
     if (arg.startsWith("--props=")) {
       propsPath = arg.replace("--props=", "");
     } else if (arg.startsWith("--output=")) {
       outputPath = arg.replace("--output=", "");
+    } else if (arg.startsWith("--public=")) {
+      publicDir = arg.replace("--public=", "");
     }
   }
 
@@ -31,10 +34,9 @@ async function main() {
 
   console.log("[Remotion] Bundling React composition...");
   const entryPoint = path.resolve(__dirname, "src/index.ts");
-  const projectRoot = path.resolve(__dirname, "../../");
   const bundleLocation = await bundle({
     entryPoint,
-    publicDir: projectRoot,
+    publicDir,
   });
 
   console.log("[Remotion] Selecting composition 'ShortsVideo'...");

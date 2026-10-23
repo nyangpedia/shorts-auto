@@ -4,6 +4,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 
@@ -374,10 +375,15 @@ def render_final_shorts(
     total_audio_dur = _get_video_duration(tts_audio_path)
     total_frames = int(round(total_audio_dur * 24))
 
-    # 프로젝트 루트 기준 상대 경로로 전달 (Remotion staticFile 호환)
-    rel_video = concatenated_video_path.resolve().relative_to(repo_root.resolve()).as_posix()
-    rel_audio = tts_audio_path.resolve().relative_to(repo_root.resolve()).as_posix()
-    rel_bgm = bgm_path.resolve().relative_to(repo_root.resolve()).as_posix() if has_bgm else None
+    # Remotion copies publicDir into a temp bundle; keep it to this project folder only.
+    # (The repo root drags in pnpm's node_modules symlinks, which Windows refuses without admin.)
+    public_dir = project_dir.resolve()
+    if has_bgm:
+        local_bgm = tmp_dir / ("bgm" + bgm_path.suffix)
+        shutil.copyfile(bgm_path, local_bgm)
+    rel_video = concatenated_video_path.resolve().relative_to(public_dir).as_posix()
+    rel_audio = tts_audio_path.resolve().relative_to(public_dir).as_posix()
+    rel_bgm = local_bgm.resolve().relative_to(public_dir).as_posix() if has_bgm else None
 
     # 0~2초 오프닝 타이틀 설정 (인자로 없으면 project.json에서 확인)
     final_title = title.strip() if title and title.strip() else None
@@ -412,9 +418,10 @@ def render_final_shorts(
         str(remotion_render_script.resolve()),
         f"--props={props_file.resolve()}",
         f"--output={final_output_path.resolve()}",
+        f"--public={public_dir}",
     ]
 
-    res = subprocess.run(render_cmd, capture_output=True, text=True, cwd=str(repo_root))
+    res = subprocess.run(render_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(repo_root))
     if res.returncode != 0:
         raise RuntimeError(f"Remotion 쇼츠 렌더링 실패: {res.stderr or res.stdout}")
 
