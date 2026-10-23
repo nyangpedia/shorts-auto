@@ -10,7 +10,7 @@ from app.core.settings import load_settings
 from app.jobs.router import create_jobs_router
 from app.projects.router import create_projects_router
 from app.references.audio import extract_reference_audio
-from app.references.openai_clients import OpenAIAnalysisClient, OpenAITranscriptionClient
+from app.references.openai_clients import OpenAIAnalysisClient, OpenAITranscriptionClient, FasterWhisperClient
 from app.references.router import create_references_router
 from app.production.router import create_production_router
 from app.references.youtube import YouTubeClient
@@ -21,11 +21,22 @@ def create_app(
     repo_root: Path | None = None,
     youtube_client_factory=YouTubeClient,
     audio_extractor=extract_reference_audio,
-    transcription_client_factory=OpenAITranscriptionClient,
+    transcription_client_factory=None,
     analysis_client_factory=OpenAIAnalysisClient,
 ) -> FastAPI:
     root = repo_root or find_repo_root()
     settings = load_settings(root)
+
+    # Select transcription client based on settings
+    if transcription_client_factory is None:
+        if settings.use_faster_whisper:
+            transcription_client_factory = lambda: FasterWhisperClient(
+                model=settings.whisper_model,
+                device=settings.whisper_device,
+            )
+        else:
+            transcription_client_factory = OpenAITranscriptionClient
+
     outputs_dir = root / settings.output_dir
     outputs_dir.mkdir(parents=True, exist_ok=True)
 

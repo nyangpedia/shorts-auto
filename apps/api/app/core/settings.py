@@ -37,6 +37,9 @@ class AppSettings(BaseModel):
     openai_analysis_model: str = "gpt-4.1-mini"
     yt_dlp_binary: str = "yt-dlp"
     reference_audio_filename: str = "reference_audio.wav"
+    use_faster_whisper: bool = True
+    whisper_model: str = "base"
+    whisper_device: str = "cpu"
     subtitle_style: SubtitleStyle = Field(default_factory=SubtitleStyle)
 
     @field_validator("output_dir")
@@ -65,6 +68,9 @@ ENV_TO_FIELD = {
     "OPENAI_ANALYSIS_MODEL": "openai_analysis_model",
     "YT_DLP_BINARY": "yt_dlp_binary",
     "REFERENCE_AUDIO_FILENAME": "reference_audio_filename",
+    "USE_FASTER_WHISPER": "use_faster_whisper",
+    "WHISPER_MODEL": "whisper_model",
+    "WHISPER_DEVICE": "whisper_device",
 }
 
 
@@ -73,6 +79,8 @@ def _coerce_value(field_name: str, value: str) -> Any:
         return float(value)
     if field_name == "default_shorts_duration_seconds":
         return int(value)
+    if field_name == "use_faster_whisper":
+        return value.lower() in ("true", "1", "yes")
     return value
 
 
