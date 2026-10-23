@@ -27,13 +27,10 @@ def create_app(
     root = repo_root or find_repo_root()
     settings = load_settings(root)
 
-    # Select transcription client based on settings
     if transcription_client_factory is None:
         if settings.use_faster_whisper:
-            transcription_client_factory = lambda: FasterWhisperClient(
-                model=settings.whisper_model,
-                device=settings.whisper_device,
-            )
+            # Router passes (api_key, model); local whisper ignores both.
+            transcription_client_factory = lambda *_: FasterWhisperClient(settings.whisper_model, settings.whisper_device)
         else:
             transcription_client_factory = OpenAITranscriptionClient
 

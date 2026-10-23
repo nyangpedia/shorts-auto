@@ -263,14 +263,18 @@ def align_subtitles_and_scenes_for_project(project_dir: Path, settings: AppSetti
         target_path = temp_mp3
 
     try:
-        with open(target_path, "rb") as audio_file:
-            transcript = client.audio.transcriptions.create(
-                file=audio_file,
-                model=settings.openai_transcription_model or "whisper-1",
-                response_format="verbose_json",
-                timestamp_granularities=["segment"],
-            )
-        raw_segments = getattr(transcript, "segments", []) or []
+        if settings.use_faster_whisper:
+            from app.references.openai_clients import FasterWhisperClient
+            raw_segments = FasterWhisperClient(settings.whisper_model, settings.whisper_device).transcribe(target_path)["segments"]
+        else:
+            with open(target_path, "rb") as audio_file:
+                transcript = client.audio.transcriptions.create(
+                    file=audio_file,
+                    model=settings.openai_transcription_model or "whisper-1",
+                    response_format="verbose_json",
+                    timestamp_granularities=["segment"],
+                )
+            raw_segments = getattr(transcript, "segments", []) or []
     finally:
         if temp_mp3 and temp_mp3.exists():
             temp_mp3.unlink()

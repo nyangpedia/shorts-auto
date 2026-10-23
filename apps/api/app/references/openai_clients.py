@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from functools import lru_cache
 from pathlib import Path
 import json
 from typing import Protocol
@@ -35,37 +36,26 @@ class OpenAITranscriptionClient:
         return dict(result)
 
 
+@lru_cache(maxsize=2)
+def _load_whisper(model: str, device: str) -> WhisperModel:
+    return WhisperModel(model, device=device, compute_type="auto")
+
+
 class FasterWhisperClient:
     def __init__(self, model: str = "base", device: str = "cpu"):
-        self.whisper_model = WhisperModel(model, device=device, compute_type="auto")
-        self.model_name = model
+        self.whisper_model = _load_whisper(model, device)
 
     def transcribe(self, audio_path: Path) -> dict:
         segments, info = self.whisper_model.transcribe(str(audio_path), language="ko")
-
-        # Convert to Whisper API response format
-        text = " ".join(segment.text for segment in segments)
         segments_list = [
-            {
-                "id": i,
-                "seek": int(segment.start * 1000),
-                "start": segment.start,
-                "end": segment.end,
-                "text": segment.text,
-                "tokens": [],
-                "temperature": 0.0,
-                "avg_logprob": -0.5,
-                "compression_ratio": 1.5,
-                "no_speech_prob": 0.001,
-            }
-            for i, segment in enumerate(segments)
+            {"id": i, "start": s.start, "end": s.end, "text": s.text}
+            for i, s in enumerate(segments)
         ]
-
         return {
             "task": "transcribe",
             "language": "ko",
             "duration": info.duration,
-            "text": text,
+            "text": " ".join(seg["text"].strip() for seg in segments_list),
             "segments": segments_list,
         }
 
