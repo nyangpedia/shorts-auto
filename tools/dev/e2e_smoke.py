@@ -33,7 +33,7 @@ step("select candidate", "POST", P + "/scripts/select", json={"candidate_id": ci
 step("finalize script", "POST", P + "/scripts/finalize", json={})
 step("TTS", "POST", P + "/production/tts")
 step("concepts + scenes", "POST", P + "/production/concepts")
-state = step("stock images (all)", "POST", P + "/production/scenes/images", params={"model": "stock"})
+state = step("stock images (all)", "POST", P + "/production/scenes/images", params={"model": "cloudflare"})
 scenes = state["video_scenes"]
 print("scenes:", len(scenes), flush=True)
 for sc in scenes:

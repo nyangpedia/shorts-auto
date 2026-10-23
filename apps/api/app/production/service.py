@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import json
 import os
 import re
@@ -920,6 +921,40 @@ def _make_free_scene_video(
     subprocess.run(cmd, capture_output=True, check=True)
 
 
+def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path) -> None:
+    # Workers AI free tier: 10k neurons/day (~200 images). Output is square; ffmpeg crops it to 9:16 later.
+    if not (settings.cloudflare_account_id and settings.cloudflare_api_token):
+        raise RuntimeError("CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN이 없습니다. .env에 넣어주세요.")
+    resp = httpx.post(
+        f"https://api.cloudflare.com/client/v4/accounts/{settings.cloudflare_account_id}"
+        "/ai/run/@cf/black-forest-labs/flux-1-schnell",
+        headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
+        json={"prompt": prompt[:2000], "steps": 4},
+        timeout=120.0,
+    )
+    resp.raise_for_status()
+    target.write_bytes(base64.b64decode(resp.json()["result"]["image"]))
+
+
+def _generate_gemini_image(settings: AppSettings, prompt: str, target: Path) -> None:
+    from google import genai
+    from google.genai import types
+
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY가 없습니다. .env에 넣어주세요.")
+    client = genai.Client(api_key=settings.gemini_api_key)
+    resp = client.models.generate_content(
+        model=settings.gemini_image_model,
+        contents=f"{prompt} Vertical 9:16 portrait composition.",
+        config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+    )
+    for part in resp.candidates[0].content.parts:
+        if part.inline_data and part.inline_data.data:
+            target.write_bytes(part.inline_data.data)
+            return
+    raise RuntimeError("Gemini가 이미지를 반환하지 않았습니다.")
+
+
 def generate_scene_image_for_project(
     project_dir: Path,
     scene_id: int,
@@ -964,6 +999,14 @@ def generate_scene_image_for_project(
 
     if model_name == "stock":
         _download(_stock_media_url(settings, "photo", _stock_query(prompt), scene_id - 1), start_image_path)
+        return start_image_path
+
+    if model_name == "cloudflare":
+        _generate_cloudflare_image(settings, prompt, start_image_path)
+        return start_image_path
+
+    if model_name == "gemini_image":
+        _generate_gemini_image(settings, prompt, start_image_path)
         return start_image_path
 
     # 1. 힉스필드 모델 시도 (nano_banana_pro, gpt_image_2, seedream_v5_pro, flux_3_image 등)

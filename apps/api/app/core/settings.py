@@ -26,8 +26,11 @@ class AppSettings(BaseModel):
     higgsfield_api_key: str = ""
     pexels_api_key: str = ""
     pixabay_api_key: str = ""
+    cloudflare_account_id: str = ""
+    cloudflare_api_token: str = ""
     qwen3_tts_base_url: str = "http://127.0.0.1:7860"
     tts_provider: str = "gemini"
+    gemini_image_model: str = "gemini-2.5-flash-image"
     gemini_tts_model: str = "gemini-3.8-flash-tts"
     gemini_tts_voice: str = "Kore"
     gemini_tts_style: str = "에너지 있고 또렷한 유튜브 쇼츠 내레이션"
@@ -73,8 +76,11 @@ ENV_TO_FIELD = {
     "HIGGSFIELD_API_KEY": "higgsfield_api_key",
     "PEXELS_API_KEY": "pexels_api_key",
     "PIXABAY_API_KEY": "pixabay_api_key",
+    "CLOUDFLARE_ACCOUNT_ID": "cloudflare_account_id",
+    "CLOUDFLARE_API_TOKEN": "cloudflare_api_token",
     "QWEN3_TTS_BASE_URL": "qwen3_tts_base_url",
     "TTS_PROVIDER": "tts_provider",
+    "GEMINI_IMAGE_MODEL": "gemini_image_model",
     "GEMINI_TTS_MODEL": "gemini_tts_model",
     "GEMINI_TTS_VOICE": "gemini_tts_voice",
     "GEMINI_TTS_STYLE": "gemini_tts_style",

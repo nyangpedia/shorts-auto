@@ -13,6 +13,26 @@ export interface ModelOption {
 
 export const IMAGE_MODELS: readonly ModelOption[] = [
   {
+    id: "cloudflare",
+    name: "Cloudflare FLUX (무료 AI 생성)",
+    provider: "Cloudflare Workers AI",
+    description: "씬 프롬프트대로 FLUX가 직접 그립니다. 하루 약 200장 무료 (Cloudflare 계정 필요)",
+    badge: "무료",
+    badgeType: "free",
+    tags: ["무료", "AI 생성", "하루 ~200장"],
+    iconType: "flux"
+  },
+  {
+    id: "gemini_image",
+    name: "Gemini 이미지",
+    provider: "Google AI Studio",
+    description: "Gemini 키로 씬 프롬프트를 그립니다. 무료 한도는 계정마다 다름",
+    badge: "무료 한도",
+    badgeType: "free",
+    tags: ["AI 생성", "Gemini 키"],
+    iconType: "google"
+  },
+  {
     id: "stock",
     name: "무료 스톡 사진",
     provider: "Pixabay / Pexels",
