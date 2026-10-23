@@ -794,6 +794,66 @@ def _run_higgsfield_generate(
         raise RuntimeError(f"Higgsfield 출력 파싱 실패: {res.stdout}") from exc
 
 
+FREE_VIDEO_MODELS = ("pexels", "kenburns")
+_STOCK_STOPWORDS = {
+    "the", "and", "with", "for", "from", "into", "onto", "that", "this", "very", "style", "vertical",
+    "portrait", "scene", "cinematic", "claymation", "clay", "plasticine", "texture", "cute", "render",
+    "rendered", "lighting", "detailed", "high", "quality", "background", "motion", "subtle", "shot",
+    "camera", "infographic", "aspect", "ratio",
+}
+
+
+def _stock_query(prompt: str) -> str:
+    # ponytail: keyword heuristic; swap for an LLM-written search query if stock matches are poor.
+    words = [w for w in re.findall(r"[A-Za-z]+", prompt) if len(w) > 2 and w.lower() not in _STOCK_STOPWORDS]
+    return " ".join(words[:4]) or "abstract background"
+
+
+def _pexels_search(settings: AppSettings, kind: str, query: str) -> list[dict]:
+    if not settings.pexels_api_key:
+        raise RuntimeError("PEXELS_API_KEY가 설정되지 않았습니다. https://www.pexels.com/api/ 에서 무료로 발급받아 .env에 넣어주세요.")
+    path = "v1/search" if kind == "photos" else "videos/search"
+    resp = httpx.get(
+        f"https://api.pexels.com/{path}",
+        params={"query": query, "orientation": "portrait", "per_page": 15},
+        headers={"Authorization": settings.pexels_api_key},
+        timeout=30.0,
+    )
+    resp.raise_for_status()
+    results = resp.json().get(kind, [])
+    if not results:
+        raise RuntimeError(f"Pexels에서 '{query}' 검색 결과가 없습니다. 씬 프롬프트를 수정해보세요.")
+    return results
+
+
+def _download(url: str, target: Path) -> None:
+    resp = httpx.get(url, timeout=120.0, follow_redirects=True)
+    resp.raise_for_status()
+    target.write_bytes(resp.content)
+
+
+def _make_free_scene_video(
+    settings: AppSettings, model_name: str, scene_id: int, prompt: str,
+    image_path: Path, video_path: Path, duration: int,
+) -> None:
+    vf_fit = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
+    if model_name == "pexels":
+        videos = _pexels_search(settings, "videos", _stock_query(prompt))
+        files = [f for f in videos[(scene_id - 1) % len(videos)]["video_files"] if f.get("height")]
+        best = min(files, key=lambda f: abs(f["height"] - 1920))
+        stock_path = video_path.with_name(f"scene_{scene_id:02d}_stock.mp4")
+        _download(best["link"], stock_path)
+        cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(stock_path), "-t", str(duration),
+               "-vf", f"{vf_fit},fps=30", "-an"]
+    else:
+        frames = duration * 30
+        zoom = f"zoompan=z='min(zoom+0.0008,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1920:fps=30"
+        cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(image_path), "-frames:v", str(frames),
+               "-vf", f"scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,{zoom}"]
+    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", str(video_path)]
+    subprocess.run(cmd, capture_output=True, check=True)
+
+
 def generate_scene_image_for_project(
     project_dir: Path,
     scene_id: int,
@@ -835,6 +895,11 @@ def generate_scene_image_for_project(
             video_path.unlink()
         except Exception:
             pass
+
+    if model_name == "pexels":
+        photos = _pexels_search(settings, "photos", _stock_query(prompt))
+        _download(photos[(scene_id - 1) % len(photos)]["src"]["portrait"], start_image_path)
+        return start_image_path
 
     # 1. 힉스필드 모델 시도 (nano_banana_pro, gpt_image_2, seedream_v5_pro, flux_3_image 등)
     if model_name != "dall-e-3":
@@ -904,7 +969,7 @@ def generate_scene_video_for_project(
     scenes_dir.mkdir(parents=True, exist_ok=True)
 
     current_scene_image = scenes_dir / f"scene_{scene_id:02d}_start.png"
-    if not current_scene_image.exists():
+    if not current_scene_image.exists() and model_name != "pexels":
         raise FileNotFoundError(f"Scene {scene_id}의 시작 이미지가 없습니다. 먼저 이미지를 생성해주세요.")
 
     # 🎬 키프레임 연속성 연동 (match_prev_frame):
@@ -933,22 +998,25 @@ def generate_scene_video_for_project(
     video_path = scenes_dir / f"scene_{scene_id:02d}_video.mp4"
     final_frame_path = scenes_dir / f"scene_{scene_id:02d}_final.png"
 
-    # 힉스필드 비디오 생성 CLI 실행 (Kling/Seedance 등은 start_image와 end_image 2개 모두 전달)
-    video_url = _run_higgsfield_generate(
-        job_type=model_name or "kling_o3_flf",
-        prompt=prompt,
-        start_image=start_image_path,
-        end_image=end_image,
-        aspect_ratio="9:16",
-        duration=duration,
-        multi_shots=multi_shots,
-        timeout_minutes=20,
-    )
+    if model_name in FREE_VIDEO_MODELS:
+        _make_free_scene_video(settings, model_name, scene_id, prompt, current_scene_image, video_path, duration)
+    else:
+        # 힉스필드 비디오 생성 CLI 실행 (Kling/Seedance 등은 start_image와 end_image 2개 모두 전달)
+        video_url = _run_higgsfield_generate(
+            job_type=model_name or "kling_o3_flf",
+            prompt=prompt,
+            start_image=start_image_path,
+            end_image=end_image,
+            aspect_ratio="9:16",
+            duration=duration,
+            multi_shots=multi_shots,
+            timeout_minutes=20,
+        )
 
-    resp = httpx.get(video_url, timeout=120.0)
-    if resp.status_code != 200:
-        raise RuntimeError(f"비디오 다운로드 실패 ({resp.status_code}): {video_url}")
-    video_path.write_bytes(resp.content)
+        resp = httpx.get(video_url, timeout=120.0)
+        if resp.status_code != 200:
+            raise RuntimeError(f"비디오 다운로드 실패 ({resp.status_code}): {video_url}")
+        video_path.write_bytes(resp.content)
 
     # ffmpeg으로 생성된 비디오의 실제 마지막 프레임 정밀 추출
     try:

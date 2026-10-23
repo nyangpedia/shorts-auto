@@ -27,3 +27,11 @@ def test_analysis_strips_code_fence_for_compatible_providers():
         create=lambda **kw: SimpleNamespace(choices=[SimpleNamespace(message=msg)]) if "response_format" not in kw else None
     )))
     assert client.analyze("p") == {"ok": 1}
+
+
+def test_stock_query_drops_style_words():
+    from app.production.service import _stock_query
+
+    prompt = "Claymation style vertical 9:16 portrait of a golden retriever running on the beach, cinematic lighting"
+    assert _stock_query(prompt) == "golden retriever running beach"
+    assert _stock_query("cinematic 3D render") == "abstract background"

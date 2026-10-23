@@ -8,10 +8,20 @@ export interface ModelOption {
   readonly badge?: string;
   readonly badgeType?: "new" | "free" | "popular" | "recommended" | "value";
   readonly tags?: readonly string[];
-  readonly iconType: "flux" | "kling" | "google" | "higgsfield" | "wan" | "seedance" | "grok" | "banana" | "gpt" | "minimax";
+  readonly iconType: "flux" | "kling" | "google" | "higgsfield" | "wan" | "seedance" | "grok" | "banana" | "gpt" | "minimax" | "stock";
 }
 
 export const IMAGE_MODELS: readonly ModelOption[] = [
+  {
+    id: "pexels",
+    name: "Pexels 스톡 사진",
+    provider: "Pexels (무료)",
+    description: "프롬프트 키워드로 무료 세로형 스톡 사진을 검색합니다. GPU·유료 크레딧 불필요",
+    badge: "무료",
+    badgeType: "free",
+    tags: ["무료", "실사"],
+    iconType: "stock"
+  },
   {
     id: "nano_banana_pro",
     name: "Nano Banana Pro",
@@ -63,6 +73,26 @@ export const IMAGE_MODELS: readonly ModelOption[] = [
 ];
 
 export const VIDEO_MODELS: readonly ModelOption[] = [
+  {
+    id: "kenburns",
+    name: "줌 모션 (Ken Burns)",
+    provider: "로컬 ffmpeg (무료)",
+    description: "씬 이미지에 천천히 줌인하는 모션을 입혀 영상으로 만듭니다. API 불필요",
+    badge: "무료",
+    badgeType: "free",
+    tags: ["무료", "오프라인"],
+    iconType: "stock"
+  },
+  {
+    id: "pexels",
+    name: "Pexels 스톡 영상",
+    provider: "Pexels (무료)",
+    description: "프롬프트 키워드로 무료 세로형 스톡 영상을 검색해 씬 길이에 맞춥니다",
+    badge: "무료",
+    badgeType: "free",
+    tags: ["무료", "실사 영상"],
+    iconType: "stock"
+  },
   {
     id: "kling_o3_flf",
     name: "Kling 3.0 Omni (Frames)",
@@ -162,7 +192,8 @@ function ModelIcon({ type }: { readonly type: ModelOption["iconType"] }) {
     grok: { symbol: "⊘", color: "#cbd5e1" },
     banana: { symbol: "🍌", color: "#eab308" },
     gpt: { symbol: "🧠", color: "#10b981" },
-    minimax: { symbol: "M", color: "#10b981" }
+    minimax: { symbol: "M", color: "#10b981" },
+    stock: { symbol: "📷", color: "#22c55e" }
   };
   const icon = iconMap[type] ?? { symbol: "❖", color: "#38bdf8" };
 
