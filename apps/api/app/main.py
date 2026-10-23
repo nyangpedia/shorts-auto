@@ -34,6 +34,9 @@ def create_app(
         else:
             transcription_client_factory = OpenAITranscriptionClient
 
+    if analysis_client_factory is OpenAIAnalysisClient and settings.llm_base_url:
+        analysis_client_factory = lambda key, model: OpenAIAnalysisClient(key, model, settings.llm_base_url)
+
     outputs_dir = root / settings.output_dir
     outputs_dir.mkdir(parents=True, exist_ok=True)
 

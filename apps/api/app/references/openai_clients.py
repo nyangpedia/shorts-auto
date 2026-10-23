@@ -66,19 +66,25 @@ class AnalysisClient(Protocol):
 
 
 class OpenAIAnalysisClient:
-    def __init__(self, api_key: str, model: str):
+    def __init__(self, api_key: str, model: str, base_url: str = ""):
         if not api_key:
-            raise ValueError("OpenAI API key is missing")
-        self.client = OpenAI(api_key=api_key)
+            raise ValueError("LLM API key is missing")
+        self.client = OpenAI(api_key=api_key, base_url=base_url or None)
         self.model = model
+        self.base_url = base_url
 
     def analyze(self, prompt: str) -> dict:
-        response = self.client.responses.create(
+        # JSON mode is OpenAI-only; other OpenAI-compatible providers get fence stripping instead.
+        extra = {} if self.base_url else {"response_format": {"type": "json_object"}}
+        response = self.client.chat.completions.create(
             model=self.model,
-            input=prompt,
-            text={"format": {"type": "json_object"}},
+            messages=[{"role": "user", "content": prompt}],
+            **extra,
         )
-        return json.loads(response.output_text)
+        content = response.choices[0].message.content.strip()
+        if content.startswith("```"):
+            content = content.split("\n", 1)[1].rsplit("```", 1)[0]
+        return json.loads(content)
 
 
 def write_reference_stt_outputs(project_dir: Path, raw_stt: dict) -> str:

@@ -16,3 +16,14 @@ def test_segments_survive_generator():
     out = client.transcribe(Path("x.wav"))
     assert [s["text"] for s in out["segments"]] == [" 문장0", " 문장1"]
     assert out["text"] == "문장0 문장1"
+
+
+def test_analysis_strips_code_fence_for_compatible_providers():
+    from app.references.openai_clients import OpenAIAnalysisClient
+
+    client = OpenAIAnalysisClient("k", "gemini-2.5-flash", "https://example.invalid/")
+    msg = SimpleNamespace(content='```json\n{"ok": 1}\n```')
+    client.client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(
+        create=lambda **kw: SimpleNamespace(choices=[SimpleNamespace(message=msg)]) if "response_format" not in kw else None
+    )))
+    assert client.analyze("p") == {"ok": 1}

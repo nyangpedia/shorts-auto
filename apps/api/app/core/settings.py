@@ -35,6 +35,7 @@ class AppSettings(BaseModel):
     default_shorts_duration_seconds: int = 45
     openai_transcription_model: str = "whisper-1"
     openai_analysis_model: str = "gpt-4.1-mini"
+    llm_base_url: str = ""
     yt_dlp_binary: str = "yt-dlp"
     reference_audio_filename: str = "reference_audio.wav"
     use_faster_whisper: bool = True
@@ -66,6 +67,7 @@ ENV_TO_FIELD = {
     "DEFAULT_SHORTS_DURATION_SECONDS": "default_shorts_duration_seconds",
     "OPENAI_TRANSCRIPTION_MODEL": "openai_transcription_model",
     "OPENAI_ANALYSIS_MODEL": "openai_analysis_model",
+    "LLM_BASE_URL": "llm_base_url",
     "YT_DLP_BINARY": "yt_dlp_binary",
     "REFERENCE_AUDIO_FILENAME": "reference_audio_filename",
     "USE_FASTER_WHISPER": "use_faster_whisper",
