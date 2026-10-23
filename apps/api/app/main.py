@@ -63,6 +63,7 @@ def create_app(
     def settings_status():
         return {
             "openai_api_key": bool(settings.openai_api_key),
+            "gemini_api_key": bool(settings.gemini_api_key),
             "youtube_api_key": bool(settings.youtube_api_key),
             "higgsfield_api_key": bool(settings.higgsfield_api_key),
             "qwen3_tts_base_url": settings.qwen3_tts_base_url,

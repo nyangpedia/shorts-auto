@@ -82,7 +82,7 @@ def create_production_router(
                 "Generate 1.2x TTS audio",
                 input_paths=["final_script.md"],
                 provider=settings.tts_provider,
-                command="generate_voice_clone" if settings.tts_provider == "qwen3" else settings.edge_tts_voice,
+                command=settings.tts_provider,
             )
             job_id = job.job_id
             update_job_state(outputs, project_id, job.job_id, "running", f"Generating TTS voice with {settings.tts_provider}")

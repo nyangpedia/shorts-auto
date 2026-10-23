@@ -101,7 +101,7 @@ def create_scripts_router(
                 "running",
                 "Generating script drafts based on analysis and feedback",
             )
-            client = script_client_factory(settings.openai_api_key, settings.openai_analysis_model)
+            client = script_client_factory(settings.llm_api_key, settings.openai_analysis_model)
             prompt = build_candidate_generation_prompt(reference_script, reference_analysis, feedback)
             response_payload = client.analyze(prompt)
             candidates = validate_candidate_payload(response_payload)
@@ -199,7 +199,7 @@ def create_scripts_router(
             )
             job_id = job.job_id
             update_job_state(outputs, project_id, job.job_id, "running", "Finalizing TTS-ready script")
-            client = script_client_factory(settings.openai_api_key, settings.openai_analysis_model)
+            client = script_client_factory(settings.llm_api_key, settings.openai_analysis_model)
             response = client.analyze(build_final_script_prompt(selected, payload.feedback))
             final_script = extract_final_script(response)
             state = build_final_script_state(selected.candidate_id, payload.feedback, final_script)

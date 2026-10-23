@@ -497,7 +497,7 @@ def create_references_router(
                 analysis_state="running",
                 analysis_message="Analyzing reference script.",
             )
-            client = analysis_client_factory(settings.openai_api_key, settings.openai_analysis_model)
+            client = analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model)
             analysis = client.analyze(build_analysis_prompt(script))
             markdown = write_reference_analysis(path, analysis)
             project = read_project(outputs, project_id)

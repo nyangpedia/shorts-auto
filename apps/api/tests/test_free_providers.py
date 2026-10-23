@@ -35,3 +35,34 @@ def test_stock_query_drops_style_words():
     prompt = "Claymation style vertical 9:16 portrait of a golden retriever running on the beach, cinematic lighting"
     assert _stock_query(prompt) == "golden retriever running beach"
     assert _stock_query("cinematic 3D render") == "abstract background"
+
+
+def test_gemini_tts_writes_sped_up_wav(tmp_path, monkeypatch):
+    import base64
+    import google.genai as genai
+    from app.core.settings import AppSettings
+    from app.production import service
+
+    calls = {}
+
+    class FakeClient:
+        def __init__(self, api_key):
+            self.interactions = SimpleNamespace(create=self.create)
+
+        def create(self, **kw):
+            calls.update(kw)
+            return SimpleNamespace(output_audio=SimpleNamespace(data=base64.b64encode(b"RIFFfake").decode()))
+
+    monkeypatch.setattr(genai, "Client", FakeClient)
+    monkeypatch.setattr(service, "_change_audio_speed", lambda src, dst, rate: dst.write_bytes(src.read_bytes() + str(rate).encode()))
+    out = service._generate_gemini_tts(tmp_path, "안녕", AppSettings(gemini_api_key="k"))
+    assert out.read_bytes() == b"RIFFfake1.2"
+    assert calls["generation_config"] == {"speech_config": [{"voice": "Kore"}]}
+    assert not (tmp_path / "temp_tts_raw.wav").exists()
+
+
+def test_llm_key_prefers_gemini_only_with_base_url():
+    from app.core.settings import AppSettings
+
+    assert AppSettings(openai_api_key="o", gemini_api_key="g").llm_api_key == "o"
+    assert AppSettings(openai_api_key="o", gemini_api_key="g", llm_base_url="u").llm_api_key == "g"

@@ -133,6 +133,36 @@ def _get_audio_duration(file_path: Path) -> float:
     return 0.0
 
 
+def _generate_gemini_tts(project_dir: Path, script_text: str, settings: AppSettings) -> Path:
+    import base64
+    from google import genai
+
+    if not settings.gemini_api_key:
+        raise RuntimeError("GEMINI_API_KEY가 없습니다. AI Studio에서 무료 키를 받아 .env에 넣거나 TTS_PROVIDER=edge로 바꿔주세요.")
+    client = genai.Client(api_key=settings.gemini_api_key)
+    interaction = client.interactions.create(
+        model=settings.gemini_tts_model,
+        input=[{
+            "type": "user_input",
+            "content": [{
+                "type": "text",
+                "text": script_text,
+                "annotations": [{"type": "speech_metadata", "style": settings.gemini_tts_style}],
+            }],
+        }],
+        response_format={"type": "audio"},
+        generation_config={"speech_config": [{"voice": settings.gemini_tts_voice}]},
+    )
+    temp_wav = project_dir / "temp_tts_raw.wav"
+    temp_wav.write_bytes(base64.b64decode(interaction.output_audio.data))
+    final_wav = project_dir / TTS_AUDIO_FILENAME
+    try:
+        _change_audio_speed(temp_wav, final_wav, rate=SPEED_RATE)
+    finally:
+        temp_wav.unlink(missing_ok=True)
+    return final_wav
+
+
 def _generate_edge_tts(project_dir: Path, script_text: str, settings: AppSettings) -> Path:
     import asyncio
     import edge_tts
@@ -157,6 +187,8 @@ def generate_tts_for_project(project_dir: Path, settings: AppSettings) -> Path:
     if not script_text:
         raise ValueError("final_script.md 대본 내용이 비어 있습니다.")
 
+    if settings.tts_provider == "gemini":
+        return _generate_gemini_tts(project_dir, script_text, settings)
     if settings.tts_provider == "edge":
         return _generate_edge_tts(project_dir, script_text, settings)
 
@@ -268,7 +300,7 @@ def align_subtitles_and_scenes_for_project(project_dir: Path, settings: AppSetti
     final_script_path = project_dir / "final_script.md"
     script_text = final_script_path.read_text(encoding="utf-8") if final_script_path.exists() else ""
 
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.llm_base_url or None)
+    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
 
     # 1. Whisper STT 호출
     file_size = os.path.getsize(wav_path)
@@ -528,7 +560,7 @@ def generate_concept_kit_and_video_scenes(
     sentence_count = len(sentences)
     numbered_sentences = "\n".join([f"{i+1}. {s}" for i, s in enumerate(sentences)])
 
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.llm_base_url or None)
+    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
     prompt = f"""
 당신은 세계 최고의 AI 쇼츠 영상 디렉터이자 3D 스톱모션 클레이메이션 비주얼 마스터입니다.
 주어진 쇼츠 대본과 STT 타임스탬프를 바탕으로:
@@ -1097,7 +1129,7 @@ def refine_and_regenerate_scene(
         except Exception:
             pass
 
-    client = OpenAI(api_key=settings.openai_api_key, base_url=settings.llm_base_url or None)
+    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
     model_llm = "gpt-4o-mini" if settings.openai_analysis_model.startswith("gpt-") and "mini" in settings.openai_analysis_model else settings.openai_analysis_model
 
     # 🎬 씬 매칭(원테이크) 여부에 따른 조건부 프레이밍 분기:

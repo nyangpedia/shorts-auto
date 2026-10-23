@@ -21,11 +21,15 @@ class SubtitleStyle(BaseModel):
 
 class AppSettings(BaseModel):
     openai_api_key: str = ""
+    gemini_api_key: str = ""
     youtube_api_key: str = ""
     higgsfield_api_key: str = ""
     pexels_api_key: str = ""
     qwen3_tts_base_url: str = "http://127.0.0.1:7860"
-    tts_provider: str = "edge"
+    tts_provider: str = "gemini"
+    gemini_tts_model: str = "gemini-3.8-flash-tts"
+    gemini_tts_voice: str = "Kore"
+    gemini_tts_style: str = "에너지 있고 또렷한 유튜브 쇼츠 내레이션"
     edge_tts_voice: str = "ko-KR-SunHiNeural"
     reference_voice_path: str = "assets/reference_voice/reference_voice.mp3"
     reference_voice_text: str = (
@@ -46,6 +50,10 @@ class AppSettings(BaseModel):
     whisper_device: str = "cpu"
     subtitle_style: SubtitleStyle = Field(default_factory=SubtitleStyle)
 
+    @property
+    def llm_api_key(self) -> str:
+        return self.gemini_api_key if self.llm_base_url and self.gemini_api_key else self.openai_api_key
+
     @field_validator("output_dir")
     @classmethod
     def validate_output_dir(cls, value: str) -> str:
@@ -59,11 +67,15 @@ class AppSettings(BaseModel):
 
 ENV_TO_FIELD = {
     "OPENAI_API_KEY": "openai_api_key",
+    "GEMINI_API_KEY": "gemini_api_key",
     "YOUTUBE_API_KEY": "youtube_api_key",
     "HIGGSFIELD_API_KEY": "higgsfield_api_key",
     "PEXELS_API_KEY": "pexels_api_key",
     "QWEN3_TTS_BASE_URL": "qwen3_tts_base_url",
     "TTS_PROVIDER": "tts_provider",
+    "GEMINI_TTS_MODEL": "gemini_tts_model",
+    "GEMINI_TTS_VOICE": "gemini_tts_voice",
+    "GEMINI_TTS_STYLE": "gemini_tts_style",
     "EDGE_TTS_VOICE": "edge_tts_voice",
     "REFERENCE_VOICE_PATH": "reference_voice_path",
     "REFERENCE_VOICE_TEXT": "reference_voice_text",
