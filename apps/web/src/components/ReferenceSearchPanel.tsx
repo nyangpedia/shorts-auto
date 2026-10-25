@@ -63,6 +63,19 @@ function formatRatio(value: number | null): string {
   return value.toLocaleString("ko-KR", { maximumFractionDigits: 2 });
 }
 
+const GENRE_OPTIONS = [
+  { label: "정보·상식", keyword: "알아두면 쓸모있는 상식" },
+  { label: "썰·이야기", keyword: "실화 썰" },
+  { label: "뉴스·시사", keyword: "오늘의 뉴스 이슈" },
+  { label: "명언·동기부여", keyword: "동기부여 명언" },
+  { label: "재테크·돈", keyword: "돈 버는 습관" },
+  { label: "건강", keyword: "건강 습관 꿀팁" },
+  { label: "심리", keyword: "심리학 행동 특징" },
+  { label: "역사", keyword: "역사 이야기" },
+  { label: "과학", keyword: "신기한 과학" },
+  { label: "미스터리·괴담", keyword: "미스터리 괴담" }
+] as const;
+
 function formatDuration(totalSeconds: number): string {
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
@@ -166,6 +179,21 @@ export function ReferenceSearchPanel({
             type="text"
             value={channelQuery}
           />
+        </label>
+        <label>
+          <span>Genre</span>
+          <select
+            name="genre"
+            onChange={(event) => setKeyword(event.target.value)}
+            value=""
+          >
+            <option value="">분야 선택 (키워드 자동 입력)</option>
+            {GENRE_OPTIONS.map((genre) => (
+              <option key={genre.label} value={genre.keyword}>
+                {genre.label}
+              </option>
+            ))}
+          </select>
         </label>
         <label>
           <span>Keyword</span>
