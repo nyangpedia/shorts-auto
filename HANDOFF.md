@@ -42,6 +42,13 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 2026-10-26 회사 PC: `cloudflare` 이미지로 영상 끝까지 성공 (47초, 12씬, 렌더 7분). 이미지-대본 일치·캐릭터 일관성 좋음
 - Cloudflare 토큰은 반드시 Workers AI → Use REST API → "Create a Workers AI API Token"으로 만든 것 (일반 토큰은 401)
 
+## 2026-10-26 회사 PC에서 추가
+- 화풍 선택 7종 (`apps/api/app/production/styles.py`, 화면 제작 패널의 "화풍" + [씬 구성하기]). 기본값은 `.env`의 `VISUAL_STYLE`
+- Gemini 무료 한도는 **모델당 하루 약 20회** (영상 1편에 5~6회) → `LLM_FALLBACK_MODELS` 순서대로 자동 전환. 3.7-flash는 응답 없어 제외
+- New Project / Edit title이 VS Code 미리보기에서 안 되던 문제 수정 (window.prompt 제거)
+- Cloudflare 일시적 400 자동 재시도
+- 레퍼런스 분석의 추천 주제 2~5번이 다른 분야로 나오는 건 원작자 설계(`analysis.py`). 같은 분야로 바꿀지 미정
+
 ## 남은 일
 - 정사각형→세로 크롭 시 양옆 잘림 있음 → 블러 배경 채우기(A) 또는 프롬프트에 중앙 배치(B) 중 사용자 확인 결과 거슬리지 않아 보류 (2026-10-26)
 - 첫 영상 품질 검토 → 스톡 검색어를 LLM이 만들게 할지 결정
