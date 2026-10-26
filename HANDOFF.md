@@ -11,7 +11,7 @@
 | 음성 | Gemini TTS `gemini-3.8-flash-tts`, 음성 Kore | edge / qwen3도 선택 가능 (`TTS_PROVIDER`) |
 | 이미지 | 씬 모델 `cloudflare`(Workers AI FLUX, 기본값, 하루 ~200장 무료, 정사각형 출력→ffmpeg가 9:16으로 크롭) | 2026-10-24 실제 생성 확인 |
 | 영상 | `kenburns`(ffmpeg 줌) | |
-| 이미지 비권장 | `stock`(Pixabay): 검색어가 영어 단어 4개 자르기라 대본과 무관한 사진이 나옴. `pollinations`: 키 없는 요청은 402로 막혀 제거함. `gemini_image`: 코드는 있으나 무료 한도 429라 사용 불가 | |
+| 이미지 제거됨 | `stock`(Pixabay/Pexels): 대본과 무관한 사진만 나와 2026-10-26 코드에서 삭제. `pollinations`: 키 없는 요청은 402로 막혀 제거함. `gemini_image`: 코드는 있으나 무료 한도 429라 사용 불가 | |
 | 렌더링 | Remotion | Windows에서 publicDir를 프로젝트 폴더로 좁혀 symlink EPERM 해결 |
 
 첫 결과물: 1080x1920, 24fps, 50초. 렌더링 약 6분(CPU).

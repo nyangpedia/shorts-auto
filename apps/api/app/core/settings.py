@@ -24,8 +24,6 @@ class AppSettings(BaseModel):
     gemini_api_key: str = ""
     youtube_api_key: str = ""
     higgsfield_api_key: str = ""
-    pexels_api_key: str = ""
-    pixabay_api_key: str = ""
     cloudflare_account_id: str = ""
     cloudflare_api_token: str = ""
     qwen3_tts_base_url: str = "http://127.0.0.1:7860"
@@ -80,8 +78,6 @@ ENV_TO_FIELD = {
     "GEMINI_API_KEY": "gemini_api_key",
     "YOUTUBE_API_KEY": "youtube_api_key",
     "HIGGSFIELD_API_KEY": "higgsfield_api_key",
-    "PEXELS_API_KEY": "pexels_api_key",
-    "PIXABAY_API_KEY": "pixabay_api_key",
     "CLOUDFLARE_ACCOUNT_ID": "cloudflare_account_id",
     "CLOUDFLARE_API_TOKEN": "cloudflare_api_token",
     "QWEN3_TTS_BASE_URL": "qwen3_tts_base_url",

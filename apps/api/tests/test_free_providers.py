@@ -29,13 +29,6 @@ def test_analysis_strips_code_fence_for_compatible_providers():
     assert client.analyze("p") == {"ok": 1}
 
 
-def test_stock_query_drops_style_words():
-    from app.production.service import _stock_query
-
-    prompt = "Claymation style vertical 9:16 portrait of a golden retriever running on the beach, cinematic lighting"
-    assert _stock_query(prompt) == "golden retriever running beach"
-    assert _stock_query("cinematic 3D render") == "abstract background"
-
 
 def test_gemini_tts_writes_sped_up_wav(tmp_path, monkeypatch):
     import base64
@@ -67,20 +60,6 @@ def test_llm_key_prefers_gemini_only_with_base_url():
     assert AppSettings(openai_api_key="o", gemini_api_key="g").llm_api_key == "o"
     assert AppSettings(openai_api_key="o", gemini_api_key="g", llm_base_url="u").llm_api_key == "g"
 
-
-def test_stock_prefers_portrait_pixabay_video(monkeypatch):
-    from app.core.settings import AppSettings
-    from app.production import service
-
-    def v(w, h, tag):
-        return {"videos": {"large": {"url": "", "width": 0, "height": 0},
-                           "medium": {"url": f"{tag}-m", "width": w, "height": h},
-                           "small": {"url": f"{tag}-s", "width": w // 2, "height": h // 2}}}
-
-    monkeypatch.setattr(service, "_http_json", lambda url, params, headers=None: {"hits": [v(1920, 1080, "land"), v(1080, 1920, "port")]})
-    s = AppSettings(pixabay_api_key="k")
-    assert service._stock_media_url(s, "video", "q", 0) == "port-m"
-    assert service._stock_media_url(s, "video", "q", 1) == "land-m"
 
 
 def test_cloudflare_retries_transient_400(tmp_path, monkeypatch):

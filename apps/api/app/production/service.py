@@ -850,63 +850,6 @@ def _run_higgsfield_generate(
         raise RuntimeError(f"Higgsfield 출력 파싱 실패: {res.stdout}") from exc
 
 
-FREE_VIDEO_MODELS = ("stock", "kenburns")
-_STOCK_STOPWORDS = {
-    "the", "and", "with", "for", "from", "into", "onto", "that", "this", "very", "style", "vertical",
-    "portrait", "scene", "cinematic", "claymation", "clay", "plasticine", "texture", "cute", "render",
-    "rendered", "lighting", "detailed", "high", "quality", "background", "motion", "subtle", "shot",
-    "camera", "infographic", "aspect", "ratio",
-}
-
-
-def _stock_query(prompt: str) -> str:
-    # ponytail: keyword heuristic; swap for an LLM-written search query if stock matches are poor.
-    words = [w for w in re.findall(r"[A-Za-z]+", prompt) if len(w) > 2 and w.lower() not in _STOCK_STOPWORDS]
-    return " ".join(words[:4]) or "abstract background"
-
-
-def _http_json(url: str, params: dict, headers: dict | None = None) -> dict:
-    resp = httpx.get(url, params=params, headers=headers or {}, timeout=30.0)
-    resp.raise_for_status()
-    return resp.json()
-
-
-def _stock_media_url(settings: AppSettings, kind: str, query: str, pick: int) -> str:
-    """kind is "photo" or "video"; returns a downloadable URL for a portrait-friendly result."""
-    if settings.pixabay_api_key:
-        base = "https://pixabay.com/api/" + ("videos/" if kind == "video" else "")
-        params = {"key": settings.pixabay_api_key, "q": query, "safesearch": "true", "per_page": 20}
-        if kind == "photo":
-            params.update(orientation="vertical", image_type="photo")
-        hits = _http_json(base, params).get("hits", [])
-        if kind == "photo":
-            urls = [h["largeImageURL"] for h in hits]
-        else:
-            # Pixabay has no orientation filter for videos; prefer portrait clips, otherwise crop landscape.
-            hits.sort(key=lambda h: h["videos"]["medium"]["height"] <= h["videos"]["medium"]["width"])
-            urls = [max((v for v in h["videos"].values() if v.get("url")), key=lambda v: v["height"])["url"] for h in hits]
-    elif settings.pexels_api_key:
-        path = "v1/search" if kind == "photo" else "videos/search"
-        data = _http_json(f"https://api.pexels.com/{path}", {"query": query, "orientation": "portrait", "per_page": 15},
-                          {"Authorization": settings.pexels_api_key})
-        if kind == "photo":
-            urls = [p["src"]["portrait"] for p in data.get("photos", [])]
-        else:
-            urls = [min((f for f in v["video_files"] if f.get("height")), key=lambda f: abs(f["height"] - 1920))["link"]
-                    for v in data.get("videos", [])]
-    else:
-        raise RuntimeError("무료 스톡 키가 없습니다. https://pixabay.com/api/docs/ 에서 키를 받아 .env의 PIXABAY_API_KEY에 넣어주세요.")
-    if not urls:
-        raise RuntimeError(f"스톡 검색 결과가 없습니다: '{query}'. 씬 프롬프트를 수정해보세요.")
-    return urls[pick % len(urls)]
-
-
-def _download(url: str, target: Path) -> None:
-    resp = httpx.get(url, timeout=120.0, follow_redirects=True)
-    resp.raise_for_status()
-    target.write_bytes(resp.content)
-
-
 def _kenburns_motion(scene_id: int, frames: int) -> str:
     """zoompan z/x/y expressions; rotates through 5 moves so consecutive scenes never repeat."""
     step = 0.15 / max(frames, 1)
@@ -922,22 +865,12 @@ def _kenburns_motion(scene_id: int, frames: int) -> str:
     return moves[(scene_id - 1) % len(moves)]
 
 
-def _make_free_scene_video(
-    settings: AppSettings, model_name: str, scene_id: int, prompt: str,
-    image_path: Path, video_path: Path, duration: int,
-) -> None:
-    vf_fit = "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920"
-    if model_name == "stock":
-        stock_path = video_path.with_name(f"scene_{scene_id:02d}_stock.mp4")
-        _download(_stock_media_url(settings, "video", _stock_query(prompt), scene_id - 1), stock_path)
-        cmd = ["ffmpeg", "-y", "-stream_loop", "-1", "-i", str(stock_path), "-t", str(duration),
-               "-vf", f"{vf_fit},fps=30", "-an"]
-    else:
-        frames = duration * 30
-        zoom = f"zoompan={_kenburns_motion(scene_id, frames)}:d={frames}:s=1080x1920:fps=30"
-        cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(image_path), "-frames:v", str(frames),
-               "-vf", f"scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,{zoom}"]
-    cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", str(video_path)]
+def _make_kenburns_video(scene_id: int, image_path: Path, video_path: Path, duration: int) -> None:
+    frames = duration * 30
+    zoom = f"zoompan={_kenburns_motion(scene_id, frames)}:d={frames}:s=1080x1920:fps=30"
+    cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(image_path), "-frames:v", str(frames),
+           "-vf", f"scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,{zoom}",
+           "-c:v", "libx264", "-pix_fmt", "yuv420p", str(video_path)]
     subprocess.run(cmd, capture_output=True, check=True)
 
 
@@ -1022,10 +955,6 @@ def generate_scene_image_for_project(
         except Exception:
             pass
 
-    if model_name == "stock":
-        _download(_stock_media_url(settings, "photo", _stock_query(prompt), scene_id - 1), start_image_path)
-        return start_image_path
-
     if model_name == "cloudflare":
         _generate_cloudflare_image(settings, prompt, start_image_path)
         return start_image_path
@@ -1102,7 +1031,7 @@ def generate_scene_video_for_project(
     scenes_dir.mkdir(parents=True, exist_ok=True)
 
     current_scene_image = scenes_dir / f"scene_{scene_id:02d}_start.png"
-    if not current_scene_image.exists() and model_name != "stock":
+    if not current_scene_image.exists():
         raise FileNotFoundError(f"Scene {scene_id}의 시작 이미지가 없습니다. 먼저 이미지를 생성해주세요.")
 
     # 🎬 키프레임 연속성 연동 (match_prev_frame):
@@ -1131,8 +1060,8 @@ def generate_scene_video_for_project(
     video_path = scenes_dir / f"scene_{scene_id:02d}_video.mp4"
     final_frame_path = scenes_dir / f"scene_{scene_id:02d}_final.png"
 
-    if model_name in FREE_VIDEO_MODELS:
-        _make_free_scene_video(settings, model_name, scene_id, prompt, current_scene_image, video_path, duration)
+    if model_name == "kenburns":
+        _make_kenburns_video(scene_id, current_scene_image, video_path, duration)
     else:
         # 힉스필드 비디오 생성 CLI 실행 (Kling/Seedance 등은 start_image와 end_image 2개 모두 전달)
         video_url = _run_higgsfield_generate(

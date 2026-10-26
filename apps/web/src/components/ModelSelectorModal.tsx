@@ -8,7 +8,7 @@ export interface ModelOption {
   readonly badge?: string;
   readonly badgeType?: "new" | "free" | "popular" | "recommended" | "value";
   readonly tags?: readonly string[];
-  readonly iconType: "flux" | "kling" | "google" | "higgsfield" | "wan" | "seedance" | "grok" | "banana" | "gpt" | "minimax" | "stock";
+  readonly iconType: "flux" | "kling" | "google" | "higgsfield" | "wan" | "seedance" | "grok" | "banana" | "gpt" | "minimax" | "motion";
 }
 
 export const IMAGE_MODELS: readonly ModelOption[] = [
@@ -31,16 +31,6 @@ export const IMAGE_MODELS: readonly ModelOption[] = [
     badgeType: "free",
     tags: ["AI 생성", "Gemini 키"],
     iconType: "google"
-  },
-  {
-    id: "stock",
-    name: "무료 스톡 사진",
-    provider: "Pixabay / Pexels",
-    description: "프롬프트 키워드로 무료 세로형 스톡 사진을 검색합니다. GPU·유료 크레딧 불필요",
-    badge: "무료",
-    badgeType: "free",
-    tags: ["무료", "실사"],
-    iconType: "stock"
   },
   {
     id: "nano_banana_pro",
@@ -97,21 +87,11 @@ export const VIDEO_MODELS: readonly ModelOption[] = [
     id: "kenburns",
     name: "줌 모션 (Ken Burns)",
     provider: "로컬 ffmpeg (무료)",
-    description: "씬 이미지에 천천히 줌인하는 모션을 입혀 영상으로 만듭니다. API 불필요",
+    description: "씬 이미지에 줌·이동 카메라 모션(5종 순환)을 입혀 영상으로 만듭니다. API 불필요",
     badge: "무료",
     badgeType: "free",
     tags: ["무료", "오프라인"],
-    iconType: "stock"
-  },
-  {
-    id: "stock",
-    name: "무료 스톡 영상",
-    provider: "Pixabay / Pexels",
-    description: "프롬프트 키워드로 무료 세로형 스톡 영상을 검색해 씬 길이에 맞춥니다",
-    badge: "무료",
-    badgeType: "free",
-    tags: ["무료", "실사 영상"],
-    iconType: "stock"
+    iconType: "motion"
   },
   {
     id: "kling_o3_flf",
@@ -213,7 +193,7 @@ function ModelIcon({ type }: { readonly type: ModelOption["iconType"] }) {
     banana: { symbol: "🍌", color: "#eab308" },
     gpt: { symbol: "🧠", color: "#10b981" },
     minimax: { symbol: "M", color: "#10b981" },
-    stock: { symbol: "📷", color: "#22c55e" }
+    motion: { symbol: "🎥", color: "#22c55e" }
   };
   const icon = iconMap[type] ?? { symbol: "❖", color: "#38bdf8" };
 
