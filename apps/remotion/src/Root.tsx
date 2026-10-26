@@ -21,6 +21,7 @@ export const RemotionRoot: React.FC = () => {
           subtitles: [],
           durationInFrames: 24 * 30,
           title: undefined,
+          sceneStarts: [],
         }}
         calculateMetadata={async ({ props }) => {
           const frames = typeof props.durationInFrames === "number" ? props.durationInFrames : 24 * 30;

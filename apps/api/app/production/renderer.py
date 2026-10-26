@@ -244,6 +244,7 @@ def render_final_shorts(
     tmp_dir.mkdir(parents=True, exist_ok=True)
 
     normalized_clips: list[Path] = []
+    clip_durations: list[float] = []
 
     # 1. 씬별 비디오 배속 조정 및 정규화 클립 생성 (24 FPS 시네마틱 모션 보존)
     for sc in scenes_data:
@@ -255,6 +256,7 @@ def render_final_shorts(
         video_path = scenes_dir / f"scene_{scene_id:02d}_video.mp4"
         start_img_path = scenes_dir / f"scene_{scene_id:02d}_start.png"
         norm_clip_path = tmp_dir / f"norm_scene_{scene_id:02d}.mp4"
+        clip_durations.append(target_dur)
 
         if video_path.exists() and video_path.stat().st_size > 1000:
             # 실제 생성된 비디오가 있는 경우 -> 모션 드득거림 방지를 위해 1.0x 원본 속도 100% 유지
@@ -406,6 +408,7 @@ def render_final_shorts(
         "subtitles": subtitles_list,
         "durationInFrames": max(24, total_frames),
         "title": final_title,
+        "sceneStarts": [round(sum(clip_durations[:i]), 3) for i in range(1, len(clip_durations))],
     }
 
     props_file = tmp_dir / "remotion_props.json"

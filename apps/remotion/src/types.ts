@@ -12,4 +12,5 @@ export interface ShortsProps {
   subtitles: SubtitleItem[];
   durationInFrames: number;
   title?: string;
+  sceneStarts?: number[];
 }

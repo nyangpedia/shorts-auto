@@ -907,6 +907,21 @@ def _download(url: str, target: Path) -> None:
     target.write_bytes(resp.content)
 
 
+def _kenburns_motion(scene_id: int, frames: int) -> str:
+    """zoompan z/x/y expressions; rotates through 5 moves so consecutive scenes never repeat."""
+    step = 0.15 / max(frames, 1)
+    cx, cy = "iw/2-(iw/zoom/2)", "ih/2-(ih/zoom/2)"
+    progress = f"min(on/{frames},1)"
+    moves = [
+        f"z='min(zoom+{step:.6f},1.15)':x='{cx}':y='{cy}'",                      # push in
+        f"z='if(eq(on,0),1.15,max(zoom-{step:.6f},1.0))':x='{cx}':y='{cy}'",     # pull out
+        f"z='1.12':x='(iw-iw/zoom)*{progress}':y='{cy}'",                        # pan left -> right
+        f"z='1.12':x='(iw-iw/zoom)*(1-{progress})':y='{cy}'",                    # pan right -> left
+        f"z='min(zoom+{step:.6f},1.15)':x='{cx}':y='(ih-ih/zoom)*0.2'",          # push in toward top
+    ]
+    return moves[(scene_id - 1) % len(moves)]
+
+
 def _make_free_scene_video(
     settings: AppSettings, model_name: str, scene_id: int, prompt: str,
     image_path: Path, video_path: Path, duration: int,
@@ -919,7 +934,7 @@ def _make_free_scene_video(
                "-vf", f"{vf_fit},fps=30", "-an"]
     else:
         frames = duration * 30
-        zoom = f"zoompan=z='min(zoom+0.0008,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d={frames}:s=1080x1920:fps=30"
+        zoom = f"zoompan={_kenburns_motion(scene_id, frames)}:d={frames}:s=1080x1920:fps=30"
         cmd = ["ffmpeg", "-y", "-loop", "1", "-i", str(image_path), "-frames:v", str(frames),
                "-vf", f"scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,{zoom}"]
     cmd += ["-c:v", "libx264", "-pix_fmt", "yuv420p", str(video_path)]

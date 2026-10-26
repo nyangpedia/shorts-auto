@@ -2,6 +2,20 @@ import React from "react";
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
 import type { SubtitleItem } from "./types";
 
+// Numbers (+ a trailing unit) pop in yellow: "초당 900도" -> "900도" highlighted.
+const NUMBER_RE = /(\d[\d,.]*\s?(?:%|퍼센트|도|초|분|시간|일|년|배|개|명|원|만|억|조|km|kg|m|g)?)/g;
+
+const highlightNumbers = (text: string): React.ReactNode[] =>
+  text.split(NUMBER_RE).map((part, i) =>
+    i % 2 === 1 ? (
+      <span key={i} style={{ color: "#ffd400" }}>
+        {part}
+      </span>
+    ) : (
+      part
+    )
+  );
+
 interface SubtitlesProps {
   subtitles: SubtitleItem[];
 }
@@ -83,7 +97,7 @@ export const Subtitles: React.FC<SubtitlesProps> = ({ subtitles }) => {
             display: "inline-block",
           }}
         >
-          {currentSub.text}
+          {highlightNumbers(currentSub.text)}
         </span>
       </div>
     </div>

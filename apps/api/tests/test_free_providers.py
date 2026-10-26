@@ -164,3 +164,11 @@ def test_fallback_llm_does_not_retry_bad_request():
     llm._client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
     with pytest.raises(BadRequestError):
         llm.chat.completions.create(model="primary", messages=[])
+
+
+def test_kenburns_moves_rotate_without_repeating_neighbors():
+    from app.production.service import _kenburns_motion
+
+    moves = [_kenburns_motion(i, 150) for i in range(1, 11)]
+    assert all(a != b for a, b in zip(moves, moves[1:]))
+    assert moves[0] == moves[5]

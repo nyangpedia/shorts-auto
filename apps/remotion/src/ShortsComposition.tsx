@@ -1,5 +1,6 @@
 import React from "react";
-import { AbsoluteFill, Audio, OffthreadVideo, staticFile } from "remotion";
+import { AbsoluteFill, Audio, OffthreadVideo, staticFile, useCurrentFrame, useVideoConfig } from "remotion";
+import { ProgressBar, SceneCutFlash, useScenePunch } from "./MotionFx";
 import { Subtitles } from "./Subtitles";
 import { TitleOverlay } from "./TitleOverlay";
 import type { ShortsProps } from "./types";
@@ -20,7 +21,11 @@ export const ShortsComposition: React.FC<ShortsProps> = ({
   bgmVolume = 0.15,
   subtitles,
   title,
+  sceneStarts = [],
 }) => {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+  const punch = useScenePunch(sceneStarts, frame, fps);
   const resolvedVideo = resolveMediaSrc(videoSrc);
   const resolvedAudio = resolveMediaSrc(audioSrc);
   const resolvedBgm = resolveMediaSrc(bgmSrc);
@@ -35,6 +40,7 @@ export const ShortsComposition: React.FC<ShortsProps> = ({
             width: "100%",
             height: "100%",
             objectFit: "cover",
+            transform: `scale(${punch})`,
           }}
         />
       ) : null}
@@ -44,6 +50,9 @@ export const ShortsComposition: React.FC<ShortsProps> = ({
 
       {/* 3. 채널 BGM 레이어 (배경음악 볼륨 조절 및 루프) */}
       {resolvedBgm ? <Audio src={resolvedBgm} volume={bgmVolume} loop /> : null}
+
+      <SceneCutFlash sceneStarts={sceneStarts} />
+      <ProgressBar />
 
       {/* 4. 고화질 볼드 숏폼 자막 레이어 */}
       <Subtitles subtitles={subtitles} />
