@@ -247,6 +247,18 @@ h2 {
   min-width: 220px;
 }
 
+.title-edit {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.title-edit input {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
 .hero-side {
   display: grid;
   justify-items: end;

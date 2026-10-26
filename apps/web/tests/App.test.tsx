@@ -206,21 +206,9 @@ describe("App", () => {
     cleanup();
   });
 
-  it("does not create a project when the prompt is canceled", async () => {
+  it("creates a project immediately and opens an inline title field", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "prompt").mockReturnValue(null);
-
-    render(<App />);
-
-    await screen.findByRole("heading", { name: project.display_name });
-    await user.click(screen.getByRole("button", { name: /New Project/i }));
-
-    expect(createProjectMock).not.toHaveBeenCalled();
-  });
-
-  it("creates an untitled project when the prompt is blank", async () => {
-    const user = userEvent.setup();
-    vi.spyOn(window, "prompt").mockReturnValue("   ");
+    const promptSpy = vi.spyOn(window, "prompt");
 
     render(<App />);
 
@@ -229,16 +217,33 @@ describe("App", () => {
 
     await waitFor(() => expect(createProjectMock).toHaveBeenCalledWith("untitled"));
     expect(screen.getByRole("heading", { name: "261011_untitled" })).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: "Project title" })).toHaveFocus();
+    expect(promptSpy).not.toHaveBeenCalled();
   });
 
-  it("updates the selected project title from the project header", async () => {
+  it("cancels inline title editing with Escape", async () => {
     const user = userEvent.setup();
-    vi.spyOn(window, "prompt").mockReturnValue("변경된 제목");
 
     render(<App />);
 
     await screen.findByRole("heading", { name: project.display_name });
     await user.click(screen.getByRole("button", { name: /Edit title/i }));
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("textbox", { name: "Project title" })).not.toBeInTheDocument();
+    expect(updateProjectMock).not.toHaveBeenCalled();
+  });
+
+  it("updates the selected project title from the project header", async () => {
+    const user = userEvent.setup();
+
+    render(<App />);
+
+    await screen.findByRole("heading", { name: project.display_name });
+    await user.click(screen.getByRole("button", { name: /Edit title/i }));
+    const input = screen.getByRole("textbox", { name: "Project title" });
+    await user.clear(input);
+    await user.type(input, "변경된 제목{Enter}");
 
     await waitFor(() =>
       expect(updateProjectMock).toHaveBeenCalledWith(project.project_id, {

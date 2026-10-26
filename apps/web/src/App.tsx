@@ -74,6 +74,7 @@ export default function App() {
   const [isScriptBusy, setIsScriptBusy] = useState(false);
   const [isProductionBusy, setIsProductionBusy] = useState(false);
   const [videoTitle, setVideoTitle] = useState<string>("");
+  const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -153,32 +154,30 @@ export default function App() {
     return selectedProject ? Object.entries(selectedProject.generated_files) : [];
   }, [selectedProject]);
 
+  // No window.prompt: embedded browsers (e.g. VS Code preview) silently return null.
   async function handleCreateProject() {
-    const titleInput = window.prompt("Project title", "untitled");
-    if (titleInput === null) {
-      return;
-    }
-    const title = titleInput.trim() || "untitled";
-
     try {
-      const project = await createProject(title);
+      const project = await createProject("untitled");
       setProjects((current) => [project, ...current]);
       setSelectedProject(project);
+      setTitleDraft("");
       setError(null);
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : "프로젝트를 만들지 못했습니다.");
     }
   }
 
-  async function handleEditTitle() {
-    if (!selectedProject) {
+  function handleSelectProject(project: Project) {
+    setTitleDraft(null);
+    setSelectedProject(project);
+  }
+
+  async function handleSaveTitle() {
+    if (!selectedProject || titleDraft === null) {
       return;
     }
-    const titleInput = window.prompt("Project title", selectedProject.project_title);
-    if (titleInput === null) {
-      return;
-    }
-    const title = titleInput.trim() || "untitled";
+    const title = titleDraft.trim() || "untitled";
+    setTitleDraft(null);
 
     try {
       const project = await updateProject(selectedProject.project_id, { project_title: title });
@@ -621,7 +620,7 @@ export default function App() {
 
         <ProjectDashboard
           onCreateProject={handleCreateProject}
-          onSelectProject={setSelectedProject}
+          onSelectProject={handleSelectProject}
           projects={projects}
           selectedProjectId={selectedProject?.project_id ?? null}
         />
@@ -637,10 +636,41 @@ export default function App() {
               <div>
                 <p className="eyebrow">Current project</p>
                 <h1>{selectedProject.display_name}</h1>
-                <p className="muted">{selectedProject.project_title}</p>
+                {titleDraft === null ? (
+                  <p className="muted">{selectedProject.project_title}</p>
+                ) : (
+                  <form
+                    className="title-edit"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleSaveTitle();
+                    }}
+                  >
+                    <input
+                      aria-label="Project title"
+                      autoFocus
+                      onChange={(event) => setTitleDraft(event.target.value)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Escape") setTitleDraft(null);
+                      }}
+                      placeholder="영상 제목 (비우면 untitled)"
+                      value={titleDraft}
+                    />
+                    <button className="primary-button" type="submit">
+                      Save
+                    </button>
+                    <button className="secondary-button" onClick={() => setTitleDraft(null)} type="button">
+                      Cancel
+                    </button>
+                  </form>
+                )}
               </div>
               <div className="hero-side">
-                <button className="secondary-button" onClick={handleEditTitle} type="button">
+                <button
+                  className="secondary-button"
+                  onClick={() => setTitleDraft(selectedProject.project_title)}
+                  type="button"
+                >
                   Edit title
                 </button>
                 <dl className="hero-meta" aria-label="Project metadata">
