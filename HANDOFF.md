@@ -39,10 +39,11 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 ## 2026-10-24 이후 추가된 것
 - 이미지 모델 `cloudflare`(기본), `gemini_image` 추가 / Pollinations 제거
 - 레퍼런스 검색 화면에 분야(Genre) 드롭다운 추가: 고르면 Keyword 칸이 채워짐. 키워드 목록은 `ReferenceSearchPanel.tsx`의 `GENRE_OPTIONS`
-- 아직 새 이미지 모델로 영상 한 편을 끝까지 돌려보지 않음 (이미지 1장 생성만 확인)
+- 2026-10-26 회사 PC: `cloudflare` 이미지로 영상 끝까지 성공 (47초, 12씬, 렌더 7분). 이미지-대본 일치·캐릭터 일관성 좋음
+- Cloudflare 토큰은 반드시 Workers AI → Use REST API → "Create a Workers AI API Token"으로 만든 것 (일반 토큰은 401)
 
 ## 남은 일
-- 화면(http://127.0.0.1:5173)에서 영상 한 편 끝까지 만들어 이미지-대본 일치, 정사각형→세로 크롭 시 잘림 확인
+- 정사각형→세로 크롭 시 양옆 잘림 있음 → 블러 배경 채우기(A) 또는 프롬프트에 중앙 배치(B) 중 결정 대기
 - 첫 영상 품질 검토 → 스톡 검색어를 LLM이 만들게 할지 결정
 - 장르 프리셋 (정보/썰/뉴스/명언)
 - 렌더링 6분 단축 검토
