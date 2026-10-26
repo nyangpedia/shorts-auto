@@ -142,7 +142,7 @@ def build_analysis_prompt(reference_script: str) -> str:
     {{
       "topic_number": 1,
       "title": "추천 주제 제목 (매력적이고 클릭을 부르는 제목)",
-      "category": "동일 분야 리메이크 / 과학·자연 / 인체·심리 / 역사·미스터리 / 일상·꿀팁 중 택1",
+      "category": "원작 리메이크 / 상식 파괴 / 미스터리·비하인드 / 실패·경고 / 비교·랭킹 / 실전 꿀팁 중 택1 (주제끼리 겹치지 않게)",
       "formula": "적용할 흥행 공식 (예: 상식 충돌형 + 실험 검증형)",
       "hook": "추천 훅 첫 문장 (시청자가 무조건 멈출 첫 마디)",
       "core_question": "시청자가 결과를 보려고 끝까지 볼 질문",
@@ -154,7 +154,9 @@ def build_analysis_prompt(reference_script: str) -> str:
 # System instruction: Analyze why viewers stop, why they keep watching, and how they feel payoff. Ensure section_breakdown is included.
 * 주의사항:
 - sentence_analyses는 대본 전체를 1~3문장 단위로 쪼개어 시청자의 속마음을 입체적으로 분석해야 합니다.
-- recommended_topics는 반드시 5개 주제를 제안해야 합니다. 1번은 '원본 소재/주제의 팩트 강화형 재구성(원작 리메이크)'이어야 하고(반드시 원본과 동일한 핵심 소재를 다룸), 2~5번은 전혀 다른 분야(과학, 인체/심리, 역사, 일상/기술 등)로의 과감한 변주여야 합니다.
+- recommended_topics는 반드시 5개 주제를 제안해야 하며, **5개 모두 레퍼런스와 같은 분야(채널 주제)** 안에서 나와야 합니다. 다른 분야(과학, 역사 등 레퍼런스와 무관한 분야)로 벗어나지 마세요.
+  - 1번: 원작 리메이크 — 원본과 같은 핵심 소재를 팩트를 보강해 더 강하게 재구성.
+  - 2~5번: 같은 분야의 **서로 다른 소재**를 각각 다른 각도(상식 파괴 / 미스터리·비하인드 / 실패·경고 / 비교·랭킹 / 실전 꿀팁 중 서로 다른 것)로 제안. 원본이나 다른 추천과 핵심 사실·사례·결론이 겹치면 안 됩니다.
 - JSON 외의 다른 텍스트는 출력하지 마세요.
 
 대본:
