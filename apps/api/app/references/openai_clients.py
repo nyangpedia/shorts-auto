@@ -5,10 +5,15 @@ from pathlib import Path
 import json
 from typing import Protocol
 
-from openai import OpenAI
+import logging
+from types import SimpleNamespace
+
+from openai import APIConnectionError, APIStatusError, NotFoundError, OpenAI, RateLimitError
 from faster_whisper import WhisperModel
 
 from app.references.files import write_reference_raw_stt, write_reference_script
+
+logger = logging.getLogger(__name__)
 
 
 class TranscriptionClient(Protocol):
@@ -60,16 +65,51 @@ class FasterWhisperClient:
         }
 
 
+class FallbackLLM:
+    """OpenAI-compatible chat client that moves to the next model when one fails.
+
+    Gemini's free tier caps each model separately (~20 requests/day), so falling through
+    a list of models multiplies the daily budget.
+    """
+
+    _RETRYABLE = (RateLimitError, NotFoundError, APIConnectionError)
+
+    def __init__(self, api_key: str, base_url: str = "", fallbacks: list[str] | None = None):
+        # max_retries=0: on a quota 429 the SDK would otherwise sleep and retry the same model.
+        self._client = OpenAI(api_key=api_key, base_url=base_url or None, max_retries=0, timeout=180.0)
+        self._fallbacks = fallbacks or []
+        self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
+
+    def _create(self, *, model: str, **kwargs):
+        models = [model] + [m for m in self._fallbacks if m != model]
+        for i, name in enumerate(models):
+            try:
+                return self._client.chat.completions.create(model=name, **kwargs)
+            except APIStatusError as exc:
+                retryable = isinstance(exc, self._RETRYABLE) or exc.status_code >= 500
+                if not retryable or i == len(models) - 1:
+                    raise
+                logger.warning("LLM %s failed (%s); falling back to %s", name, exc.status_code, models[i + 1])
+            except APIConnectionError as exc:
+                if i == len(models) - 1:
+                    raise
+                logger.warning("LLM %s failed (%s); falling back to %s", name, type(exc).__name__, models[i + 1])
+
+
+def make_llm_client(settings) -> FallbackLLM:
+    return FallbackLLM(settings.llm_api_key, settings.llm_base_url, settings.llm_fallback_list)
+
+
 class AnalysisClient(Protocol):
     def analyze(self, prompt: str) -> dict:
         ...
 
 
 class OpenAIAnalysisClient:
-    def __init__(self, api_key: str, model: str, base_url: str = ""):
+    def __init__(self, api_key: str, model: str, base_url: str = "", fallbacks: list[str] | None = None):
         if not api_key:
             raise ValueError("LLM API key is missing")
-        self.client = OpenAI(api_key=api_key, base_url=base_url or None)
+        self.client = FallbackLLM(api_key, base_url, fallbacks)
         self.model = model
         self.base_url = base_url
 

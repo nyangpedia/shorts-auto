@@ -48,12 +48,17 @@ class AppSettings(BaseModel):
     openai_transcription_model: str = "whisper-1"
     openai_analysis_model: str = "gpt-4.1-mini"
     llm_base_url: str = ""
+    llm_fallback_models: str = ""
     yt_dlp_binary: str = "yt-dlp"
     reference_audio_filename: str = "reference_audio.wav"
     use_faster_whisper: bool = True
     whisper_model: str = "base"
     whisper_device: str = "cpu"
     subtitle_style: SubtitleStyle = Field(default_factory=SubtitleStyle)
+
+    @property
+    def llm_fallback_list(self) -> list[str]:
+        return [m.strip() for m in self.llm_fallback_models.split(",") if m.strip()]
 
     @property
     def llm_api_key(self) -> str:
@@ -96,6 +101,7 @@ ENV_TO_FIELD = {
     "OPENAI_TRANSCRIPTION_MODEL": "openai_transcription_model",
     "OPENAI_ANALYSIS_MODEL": "openai_analysis_model",
     "LLM_BASE_URL": "llm_base_url",
+    "LLM_FALLBACK_MODELS": "llm_fallback_models",
     "YT_DLP_BINARY": "yt_dlp_binary",
     "REFERENCE_AUDIO_FILENAME": "reference_audio_filename",
     "USE_FASTER_WHISPER": "use_faster_whisper",

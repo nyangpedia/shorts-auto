@@ -116,7 +116,7 @@ def test_concept_prompt_uses_selected_style(tmp_path, monkeypatch):
         seen["prompt"] = kw["messages"][0]["content"]
         return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=_json.dumps(reply)))])
 
-    monkeypatch.setattr(service, "OpenAI", lambda **kw: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    monkeypatch.setattr(service, "make_llm_client", lambda settings: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
     monkeypatch.setattr(service, "calibrate_scenes_with_stt", lambda scenes, stt, dur: scenes)
     kit, _ = service.generate_concept_kit_and_video_scenes(tmp_path, AppSettings(), "webtoon")
     assert "Korean webtoon" in seen["prompt"] and "clay" not in seen["prompt"].lower()
@@ -130,3 +130,37 @@ def test_unknown_style_rejected():
 
     with pytest.raises(ValueError):
         get_style("nope")
+
+
+def test_fallback_llm_moves_to_next_model_on_quota():
+    import httpx
+    from openai import RateLimitError
+    from app.references.openai_clients import FallbackLLM
+
+    tried = []
+
+    def create(model, **kw):
+        tried.append(model)
+        if model != "lite":
+            raise RateLimitError("quota", response=httpx.Response(429, request=httpx.Request("POST", "http://x")), body=None)
+        return "ok"
+
+    llm = FallbackLLM("k", "http://x", ["primary", "lite", "never"])
+    llm._client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    assert llm.chat.completions.create(model="primary", messages=[]) == "ok"
+    assert tried == ["primary", "lite"]
+
+
+def test_fallback_llm_does_not_retry_bad_request():
+    import httpx
+    import pytest
+    from openai import BadRequestError
+    from app.references.openai_clients import FallbackLLM
+
+    def create(model, **kw):
+        raise BadRequestError("bad", response=httpx.Response(400, request=httpx.Request("POST", "http://x")), body=None)
+
+    llm = FallbackLLM("k", "http://x", ["lite"])
+    llm._client = SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create)))
+    with pytest.raises(BadRequestError):
+        llm.chat.completions.create(model="primary", messages=[])

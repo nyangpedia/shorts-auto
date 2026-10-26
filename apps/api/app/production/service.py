@@ -15,6 +15,7 @@ from openai import OpenAI
 from app.core.paths import find_repo_root
 from app.core.settings import AppSettings
 from app.production.styles import get_style
+from app.references.openai_clients import make_llm_client
 from app.production.models import (
     ConceptKit,
     ContinuityState,
@@ -303,7 +304,7 @@ def align_subtitles_and_scenes_for_project(project_dir: Path, settings: AppSetti
     final_script_path = project_dir / "final_script.md"
     script_text = final_script_path.read_text(encoding="utf-8") if final_script_path.exists() else ""
 
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
+    client = make_llm_client(settings)
 
     # 1. Whisper STT 호출
     file_size = os.path.getsize(wav_path)
@@ -565,7 +566,7 @@ def generate_concept_kit_and_video_scenes(
     sentence_count = len(sentences)
     numbered_sentences = "\n".join([f"{i+1}. {s}" for i, s in enumerate(sentences)])
 
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
+    client = make_llm_client(settings)
     prompt = f"""
 당신은 세계 최고의 AI 쇼츠 영상 디렉터이자 {st["role"]}입니다.
 주어진 쇼츠 대본과 STT 타임스탬프를 바탕으로:
@@ -1197,7 +1198,7 @@ def refine_and_regenerate_scene(
             pass
 
     refine_style = get_style(concept_kit_data.get("style_id") or settings.visual_style)[1]
-    client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
+    client = make_llm_client(settings)
     model_llm = "gpt-4o-mini" if settings.openai_analysis_model.startswith("gpt-") and "mini" in settings.openai_analysis_model else settings.openai_analysis_model
 
     # 🎬 씬 매칭(원테이크) 여부에 따른 조건부 프레이밍 분기:
