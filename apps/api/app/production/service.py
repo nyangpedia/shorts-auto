@@ -5,6 +5,7 @@ import json
 import os
 import re
 import subprocess
+import time
 from pathlib import Path
 from typing import Any
 
@@ -925,13 +926,18 @@ def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path)
     # Workers AI free tier: 10k neurons/day (~200 images). Output is square; ffmpeg crops it to 9:16 later.
     if not (settings.cloudflare_account_id and settings.cloudflare_api_token):
         raise RuntimeError("CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN이 없습니다. .env에 넣어주세요.")
-    resp = httpx.post(
-        f"https://api.cloudflare.com/client/v4/accounts/{settings.cloudflare_account_id}"
-        "/ai/run/@cf/black-forest-labs/flux-1-schnell",
-        headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
-        json={"prompt": prompt[:2000], "steps": 4},
-        timeout=120.0,
-    )
+    # Workers AI intermittently returns 400 for a prompt that succeeds on the next try.
+    for attempt in range(3):
+        resp = httpx.post(
+            f"https://api.cloudflare.com/client/v4/accounts/{settings.cloudflare_account_id}"
+            "/ai/run/@cf/black-forest-labs/flux-1-schnell",
+            headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
+            json={"prompt": prompt[:2000], "steps": 4},
+            timeout=120.0,
+        )
+        if resp.status_code not in (400, 429, 500, 502, 503, 504) or attempt == 2:
+            break
+        time.sleep(2 * (attempt + 1))
     resp.raise_for_status()
     target.write_bytes(base64.b64decode(resp.json()["result"]["image"]))
 

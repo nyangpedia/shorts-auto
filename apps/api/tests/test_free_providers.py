@@ -81,3 +81,22 @@ def test_stock_prefers_portrait_pixabay_video(monkeypatch):
     s = AppSettings(pixabay_api_key="k")
     assert service._stock_media_url(s, "video", "q", 0) == "port-m"
     assert service._stock_media_url(s, "video", "q", 1) == "land-m"
+
+
+def test_cloudflare_retries_transient_400(tmp_path, monkeypatch):
+    import base64
+    from app.core.settings import AppSettings
+    from app.production import service
+
+    codes = iter([400, 200])
+
+    def fake_post(*a, **kw):
+        code = next(codes)
+        return SimpleNamespace(status_code=code, raise_for_status=lambda: None,
+                               json=lambda: {"result": {"image": base64.b64encode(b"img").decode()}})
+
+    monkeypatch.setattr(service.httpx, "post", fake_post)
+    monkeypatch.setattr(service.time, "sleep", lambda s: None)
+    target = tmp_path / "x.png"
+    service._generate_cloudflare_image(AppSettings(cloudflare_account_id="a", cloudflare_api_token="t"), "p", target)
+    assert target.read_bytes() == b"img"
