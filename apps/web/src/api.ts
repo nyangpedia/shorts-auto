@@ -188,8 +188,9 @@ export function alignSubtitlesAndScenes(projectId: string): Promise<ProductionSt
   });
 }
 
-export function generateConcepts(projectId: string): Promise<ProductionState> {
-  return request<ProductionState>(`/api/projects/${encodeURIComponent(projectId)}/production/concepts`, {
+export function generateConcepts(projectId: string, style?: string): Promise<ProductionState> {
+  const query = style ? `?style=${encodeURIComponent(style)}` : "";
+  return request<ProductionState>(`/api/projects/${encodeURIComponent(projectId)}/production/concepts${query}`, {
     method: "POST"
   });
 }

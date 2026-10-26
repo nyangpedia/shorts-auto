@@ -14,6 +14,7 @@ from openai import OpenAI
 
 from app.core.paths import find_repo_root
 from app.core.settings import AppSettings
+from app.production.styles import get_style
 from app.production.models import (
     ConceptKit,
     ContinuityState,
@@ -537,7 +538,9 @@ def calibrate_scenes_with_stt(
 def generate_concept_kit_and_video_scenes(
     project_dir: Path,
     settings: AppSettings,
+    style_id: str | None = None,
 ) -> tuple[ConceptKit, list[VideoSceneItem]]:
+    style_id, st = get_style(style_id or settings.visual_style)
     final_script_path = project_dir / "final_script.md"
     script_text = final_script_path.read_text(encoding="utf-8").strip() if final_script_path.exists() else ""
     if not script_text:
@@ -564,9 +567,9 @@ def generate_concept_kit_and_video_scenes(
 
     client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
     prompt = f"""
-당신은 세계 최고의 AI 쇼츠 영상 디렉터이자 3D 스톱모션 클레이메이션 비주얼 마스터입니다.
+당신은 세계 최고의 AI 쇼츠 영상 디렉터이자 {st["role"]}입니다.
 주어진 쇼츠 대본과 STT 타임스탬프를 바탕으로:
-1. 'Cute professional claymation infographic' 스타일의 비주얼 컨셉 키트(`concept_kit`)를 설계하세요.
+1. '{st["style"]}' 스타일의 비주얼 컨셉 키트(`concept_kit`)를 설계하세요.
 2. 전체 영상 오디오 길이(총 {duration:.1f}초)와 대본에서 분할된 총 {sentence_count}개의 의미 단위 구절 목록에 맞추어,
    **단 하나의 구절도 누락하거나 임의로 묶지 않고 1:1로 정확히 {sentence_count}개의 연속적인 비디오 씬(Scene 1 ~ Scene {sentence_count})을 설계**하세요.
    쇼츠 대본 길이에 따라 씬 개수는 자유롭고 유연하게 확장/축소되며(현재 대본 기준: 총 {sentence_count}개 씬),
@@ -595,21 +598,20 @@ def generate_concept_kit_and_video_scenes(
 - **1. 주연 캐릭터 및 피사체 고정 락 (Hero Character Lock - 절대 필수)**:
   - 대본의 내용과 주제에 가장 잘 부합하는 핵심 주인공 캐릭터를 1개 정의하세요.
   - 해당 캐릭터의 고유 외형과 비주얼 특징을 정하고, 모든 씬 프롬프트에 100% 동일하게 일관되게 명시하세요.
-  - 절대로 대본 주제와 상관없는 엉뚱한 캐릭터를 임의로 넣지 마시고, 'a clay figurine'처럼 모호하게 쓰지 마세요.
+  - 절대로 대본 주제와 상관없는 엉뚱한 캐릭터를 임의로 넣지 마시고, 'a figure'처럼 모호하게 쓰지 마세요.
 - **2. 나레이션 직결 시각화 원칙 (Narration-Driven Visual Metaphor - 핵심)**:
   - 각 씬의 이미지는 해당 씬의 나레이션 핵심 내용과 과학적 사실/지식을 시청자가 1초 만에 직관적으로 이해할 수 있는 **상황 극화 및 시각적 은유**가 화면 중심에 반드시 존재해야 합니다!
 - **3. 무대/배경 연속성 락 (Stage & Setting Continuity)**:
   - 대본 주제에 맞는 세계관과 배경 공간을 설정하고, 이어지는 씬들 간에 공간적 일관성을 유지하세요.
-- **4. 초미니어처 생명체 스케일 & 극적 대비**:
-  - 인물은 **"tiny miniature clay figurine (approx. 2-3cm scale)"**로 묘사하고, 이를 둘러싼 거대한 오브젝트나 자연 현상과 극적인 스케일 대비를 이루게 하세요.
-- **5. 매크로 접사 및 클레이 공예 질감 (Tactile Macro Details)**:
-  - 프롬프트에 매크로 사진 디테일을 반드시 포함하세요:
-    `macro photography details, visible handcrafted clay fingerprints, hand-molded plasticine textures, soft matte finish, subtle clay seams, shallow depth of field with creamy bokeh`.
-- **6. 조명과 색감 (Studio Lighting & Atmosphere)**:
-  - 부드러운 스튜디오 림라이트, 방향성 키라이트, 입체적인 그림자 (`cinematic studio lighting, soft rim highlights, deep tactile shadows`).
+- **4. 인물 묘사 방식**:
+  - {st["subject"]}.
+- **5. 화풍 질감 (모든 씬 공통)**:
+  - 프롬프트에 다음 질감 디테일을 반드시 포함하세요: `{st["texture"]}`.
+- **6. 조명과 색감**:
+  - `{st["lighting"]}`.
 - **7. 텍스트 완전 배제 (Strict Negative Constraint)**:
   - 이미지 내에 어떠한 글자, 숫자, 기호, 워터마크도 절대 나타나선 안 됩니다:
-    `Strictly NO text, NO letters, NO numbers, NO labels, NO typography, NO watermark, clean 3D clay visual`.
+    `Strictly NO text, NO letters, NO numbers, NO labels, NO typography, NO watermark`.
 - **8. 포맷**: 반드시 수직 9:16 비율(`vertical 9:16 portrait aspect ratio`)의 영문 프롬프트로 작성하세요.
 
 ======================================================================
@@ -617,8 +619,8 @@ def generate_concept_kit_and_video_scenes(
 ======================================================================
 - **반드시 다음 [3단계 시퀀스 공식]을 하나의 매끄러운 영문 문단으로 작성하세요**:
   1) **[Starting Visual Anchor]**: 현재 씬의 시작 이미지 구도와 피사체 초기 상태에서 출발 명시.
-  2) **[Dynamic Continuous Motion & Camera Trajectory]**: 단일 샷(Single-take)의 끊김 없는 부드러운 카메라 이동과 물리적 클레이 스톱모션 애니메이션 명시.
-  3) **[Ending Visual Anchor & Handoff Target]**: 영상이 끝나는 지점의 구도와 포커스를 명확히 하여 다음 씬의 시작 이미지와 완벽히 맞아떨어지도록 인계 명시 (Smooth stop-motion animation, no jump cuts).
+  2) **[Dynamic Continuous Motion & Camera Trajectory]**: 단일 샷(Single-take)의 끊김 없는 부드러운 카메라 이동과 {st["motion"]} 명시.
+  3) **[Ending Visual Anchor & Handoff Target]**: 영상이 끝나는 지점의 구도와 포커스를 명확히 하여 다음 씬의 시작 이미지와 완벽히 맞아떨어지도록 인계 명시 ({st["motion"]}, no jump cuts).
 
 ======================================================================
 [규칙 3: continuity 필드]
@@ -643,9 +645,9 @@ def generate_concept_kit_and_video_scenes(
 반드시 다음 pure JSON 구조로만 반환하세요 (pure JSON, no markdown backticks):
 {{
   "concept_kit": {{
-    "visual_style": "Cute professional miniature claymation infographic, vertical 9:16, handcrafted plasticine texture, visible fingerprints, stop-motion look, vivid rich studio lighting, macro photography",
+    "visual_style": "{st["style"]}, vertical 9:16",
     "color_and_lighting": "Cinematic soft key light, thematic cohesive palette matching the script, deep studio shadows, no neon pink or purple",
-    "core_objects": ["대본의 핵심 오브젝트 1 (영문)", "대본의 핵심 오브젝트 2 (영문)", "주인공 클레이 피규어 (영문)", "핵심 환경 요소 (영문)"],
+    "core_objects": ["대본의 핵심 오브젝트 1 (영문)", "대본의 핵심 오브젝트 2 (영문)", "주인공 캐릭터 (영문)", "핵심 환경 요소 (영문)"],
     "camera_composition": "Vertical 9:16 portrait framing, eye-level to dynamic macro camera movements, macro lens with creamy bokeh",
     "continuity_rules": [
       "Camera motions smoothly guide the visual narrative through single-take transitions.",
@@ -659,8 +661,8 @@ def generate_concept_kit_and_video_scenes(
       "start": 0.0,
       "end": 5.5,
       "narration": "해당 씬에 해당하는 원본 한국어 대본 문장 그대로 (절대 영어 번역 금지)",
-      "start_image_prompt": "Claymation style vertical 9:16 portrait, macro photography. [Scene 1의 대본 내용에 맞춘 정밀한 영문 이미지 프롬프트]. Handcrafted plasticine texture with visible fingerprints, soft studio directional lighting, creamy background bokeh, strictly NO text, NO letters.",
-      "video_prompt": "Starting from the [Scene 1 시작 구도 영문], the camera performs a continuous smooth [카메라 모션 및 피사체 움직임 영문], finishing on [Scene 2로 이어지는 엔딩 구도 영문]. Smooth stop-motion animation, no jump cuts.",
+      "start_image_prompt": "{st["style"]}, vertical 9:16 portrait. [Scene 1의 대본 내용에 맞춘 정밀한 영문 이미지 프롬프트]. {st["texture"]}, {st["lighting"]}, strictly NO text, NO letters.",
+      "video_prompt": "Starting from the [Scene 1 시작 구도 영문], the camera performs a continuous smooth [카메라 모션 및 피사체 움직임 영문], finishing on [Scene 2로 이어지는 엔딩 구도 영문]. {st["motion"]}, no jump cuts.",
       "continuity": {{
         "camera": "Eye-level starting shot performing a smooth motion",
         "subject_state": "Initial state of the subject in Scene 1",
@@ -685,6 +687,7 @@ def generate_concept_kit_and_video_scenes(
 
     data = json.loads(content)
     concept_kit = ConceptKit.model_validate(data["concept_kit"])
+    concept_kit.style_id = style_id
     raw_video_scenes: list[VideoSceneItem] = []
     for item in data.get("video_scenes", []):
         sc_start = float(item.get("start", 0.0))
@@ -983,7 +986,7 @@ def generate_scene_image_for_project(
 
     prompt = target_scene.get("start_image_prompt", "")
     if not prompt:
-        prompt = f"Claymation style vertical 9:16 portrait scene {scene_id}, cute plasticine texture"
+        prompt = f"Vertical 9:16 portrait illustration for scene {scene_id}"
 
     scenes_dir = project_dir / SCENES_DIR_NAME
     scenes_dir.mkdir(parents=True, exist_ok=True)
@@ -1193,6 +1196,7 @@ def refine_and_regenerate_scene(
         except Exception:
             pass
 
+    refine_style = get_style(concept_kit_data.get("style_id") or settings.visual_style)[1]
     client = OpenAI(api_key=settings.llm_api_key, base_url=settings.llm_base_url or None)
     model_llm = "gpt-4o-mini" if settings.openai_analysis_model.startswith("gpt-") and "mini" in settings.openai_analysis_model else settings.openai_analysis_model
 
@@ -1229,7 +1233,7 @@ def refine_and_regenerate_scene(
 - 씬 번호: Scene {scene_id}
 - 대본 나레이션: {target_scene.get('narration', '')}
 - 기존 이미지 프롬프트: {target_scene.get('start_image_prompt', '')}
-- 컨셉 스타일: {concept_kit_data.get('visual_style', 'Cute professional miniature claymation infographic')}
+- 컨셉 스타일: {concept_kit_data.get('visual_style') or refine_style["style"]}
 - 피사체/조명: {concept_kit_data.get('color_and_lighting', '')}
 - 씬 매칭(클라이맥스 목적지) 적용 여부: {'적용 (도착점 클라이맥스)' if is_matched_mode else '미적용 (0초 시작 프레임)'}
 {scene_role_guide}
@@ -1245,7 +1249,7 @@ def refine_and_regenerate_scene(
    - 피사체와 도구/환경의 상대적 위치와 상호작용이 물리적 상식에 맞아야 하며, 엉뚱한 위치를 만지거나 허공을 짚는 왜곡된 구도를 엄격히 금지합니다.
 4. [주연 캐릭터 락 (Hero Character Lock)]: 대본 및 컨셉 키트에 정의된 핵심 주인공의 고유 명칭과 비주얼 특징을 일관되게 명시하세요. 절대 'a generic superhero'나 'a figurine'처럼 모호하게 바꿔 엉뚱한 캐릭터가 렌더링되게 하지 마세요.
 5. [나레이션 직결 시각화 원칙 (Narration-Driven Visual Metaphor)]: 해당 씬의 나레이션 핵심 메시지와 과학적 사실을 시청자가 1초 만에 이해할 수 있는 구체적인 시각적 은유와 상호작용 장치를 화면 중심에 배치하세요.
-6. [스타일 및 조명 유지]: 클레이 질감(Claymation style vertical 9:16 portrait, handcrafted plasticine texture, visible fingerprints, soft studio directional lighting)은 일관되게 유지하세요.
+6. [스타일 및 조명 유지]: 화풍({refine_style["style"]}, vertical 9:16 portrait, {refine_style["texture"]}, {refine_style["lighting"]})은 일관되게 유지하세요.
 7. [텍스트 금지]: 끝에 strictly NO text, NO letters를 반드시 포함하세요.
 
 반드시 다음 pure JSON으로만 응답하세요:
@@ -1282,7 +1286,7 @@ def refine_and_regenerate_scene(
 - 이 씬(Scene {scene_id})은 이전 씬(Scene {scene_id - 1})의 마지막 프레임에서 출발하여, 이번 씬의 클라이맥스 목적지 이미지({target_scene.get('start_image_prompt', '')})로 5초간 카메라 무빙을 거쳐 부드럽게 도킹(Docking)하는 원테이크 연결 비디오입니다!
 - 영상 프롬프트 작성 공식:
   1) Starting from: 이전 씬의 마지막 샷 구도/피사체 상태에서 출발 명시.
-  2) Dynamic Motion: 5초간의 끊김 없는 부드러운 카메라 무빙(크레인 틸트, 패닝 등)과 클레이 피사체의 역동적 변화.
+  2) Dynamic Motion: 5초간의 끊김 없는 부드러운 카메라 무빙(크레인 틸트, 패닝 등)과 피사체의 역동적 변화.
   3) Finishing on: 이번 씬의 클라이맥스 목적지 이미지의 구도와 피사체에 완벽히 도킹하여 안착.
 """
         else:

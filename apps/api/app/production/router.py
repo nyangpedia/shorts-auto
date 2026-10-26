@@ -193,6 +193,7 @@ def create_production_router(
     @router.post("/concepts")
     def generate_concepts(
         project_id: str,
+        style: str | None = None,
         outputs: Path = Depends(outputs_dir_provider),
         settings: AppSettings = Depends(settings_provider),
     ):
@@ -211,7 +212,7 @@ def create_production_router(
             job_id = job.job_id
             update_job_state(outputs, project_id, job.job_id, "running", "Designing concept kit and continuity video scenes")
 
-            generate_concept_kit_and_video_scenes(path, settings)
+            generate_concept_kit_and_video_scenes(path, settings, style)
 
             project = read_project(outputs, project_id)
             project.generated_files["concept_kit"] = CONCEPT_KIT_FILENAME

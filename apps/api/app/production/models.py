@@ -81,6 +81,7 @@ class ConceptKit(BaseModel):
     model_config = ConfigDict(extra="ignore")
 
     visual_style: str = "Cute professional claymation infographic"
+    style_id: str = "claymation"
     color_and_lighting: str = ""
     core_objects: list[str] = Field(default_factory=list)
     camera_composition: str = "9:16 vertical composition, shallow depth of field"

@@ -7,13 +7,24 @@ import {
   type ModelOption
 } from "./ModelSelectorModal";
 
+// Keep ids in sync with VISUAL_STYLES in apps/api/app/production/styles.py.
+export const VISUAL_STYLES = [
+  { id: "claymation", label: "3D 클레이메이션" },
+  { id: "flat", label: "플랫 인포그래픽" },
+  { id: "cinematic", label: "시네마틱 실사" },
+  { id: "webtoon", label: "웹툰풍" },
+  { id: "isometric", label: "아이소메트릭 미니어처" },
+  { id: "watercolor", label: "감성 수채화 애니" },
+  { id: "vintage", label: "다크 빈티지 사진" }
+] as const;
+
 interface ProductionPanelProps {
   readonly projectId: string;
   readonly productionState: ProductionState | null;
   readonly isBusy: boolean;
   readonly hasFinalScript: boolean;
   readonly onGenerateProduction: () => void;
-  readonly onGenerateConcepts?: () => void;
+  readonly onGenerateConcepts?: (style: string) => void;
   readonly onGenerateSceneImage?: (sceneId: number, model?: string) => void;
   readonly onGenerateAllSceneImages?: (model?: string) => void;
   readonly onGenerateSceneVideo?: (sceneId: number, model?: string, duration?: number, multiShots?: boolean, matchPrevFrame?: boolean) => void;
@@ -59,6 +70,7 @@ export function ProductionPanel({
   const [expandedPromptId, setExpandedPromptId] = useState<number | null>(null);
   const [imageModel, setImageModel] = useState<string>("cloudflare");
   const [videoModel, setVideoModel] = useState<string>("kenburns");
+  const [styleId, setStyleId] = useState<string>("claymation");
   const [modalMode, setModalMode] = useState<"image" | "video" | null>(null);
   const [multiShotsMap, setMultiShotsMap] = useState<Record<number, boolean>>({});
   const [matchPrevMap, setMatchPrevMap] = useState<Record<number, boolean>>({});
@@ -274,6 +286,10 @@ export function ProductionPanel({
   const audioUrl = hasAudio ? `/api/projects/${encodeURIComponent(projectId)}/production/audio` : null;
   const duration = productionState?.duration_seconds;
   const conceptKit = productionState?.concept_kit;
+
+  useEffect(() => {
+    if (conceptKit?.style_id) setStyleId(conceptKit.style_id);
+  }, [conceptKit?.style_id]);
   const videoScenes = productionState?.video_scenes ?? [];
   const hasFinalVideo = Boolean(productionState?.has_final_video);
   const finalVideoUrl = productionState?.final_video_url ?? (hasFinalVideo ? `/api/projects/${encodeURIComponent(projectId)}/production/final-video` : null);
@@ -871,11 +887,30 @@ export function ProductionPanel({
             )}
           </div>
 
+          {onGenerateConcepts && hasAudio && (
+            <div className="style-picker">
+              <label>
+                화풍
+                <select value={styleId} onChange={(event) => setStyleId(event.target.value)} disabled={isBusy}>
+                  {VISUAL_STYLES.map((style) => (
+                    <option key={style.id} value={style.id}>
+                      {style.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button className="secondary-button" type="button" disabled={isBusy} onClick={() => onGenerateConcepts(styleId)}>
+                {conceptKit ? "이 화풍으로 씬 다시 구성" : "씬 구성하기"}
+              </button>
+              {conceptKit && <small className="muted">씬 프롬프트를 새로 만듭니다. 이미지는 다시 생성해야 합니다.</small>}
+            </div>
+          )}
+
           {/* 컨셉 키트 요약 카드 */}
           {conceptKit && (
             <div style={{ background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: "8px", padding: "1rem" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                <strong style={{ color: "#0284c7" }}>🎨 Visual Concept Kit (클레이메이션 인포그래픽)</strong>
+                <strong style={{ color: "#0284c7" }}>🎨 Visual Concept Kit ({VISUAL_STYLES.find((style) => style.id === conceptKit.style_id)?.label ?? "3D 클레이메이션"})</strong>
                 <span className="count-pill">9:16 Portrait</span>
               </div>
               <p style={{ margin: "0.25rem 0", fontSize: "0.9rem", color: "#1e293b" }}>
@@ -1067,7 +1102,7 @@ export function ProductionPanel({
             {videoScenes.length === 0 ? (
               <p className="empty-state">
                 {hasAudio
-                  ? "음성이 준비되었습니다. [🎨 6개 비디오 씬 & 연속성 설계] 버튼을 눌러 원테이크 씬들을 구성하세요."
+                  ? "음성이 준비되었습니다. 위에서 화풍을 고르고 [씬 구성하기]를 눌러주세요."
                   : "먼저 음성을 생성해주세요."}
               </p>
             ) : (

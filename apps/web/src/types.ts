@@ -198,6 +198,7 @@ export interface VideoSceneItem {
 
 export interface ConceptKit {
   readonly visual_style: string;
+  readonly style_id?: string;
   readonly color_and_lighting: string;
   readonly core_objects: readonly string[];
   readonly camera_composition: string;

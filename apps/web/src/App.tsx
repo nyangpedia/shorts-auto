@@ -394,13 +394,13 @@ export default function App() {
     }
   }
 
-  async function handleGenerateConcepts() {
+  async function handleGenerateConcepts(style: string) {
     if (!selectedProject) {
       return;
     }
     setIsProductionBusy(true);
     try {
-      const updated = await generateConcepts(selectedProject.project_id);
+      const updated = await generateConcepts(selectedProject.project_id, style);
       setProductionState(updated);
       const project = await getProject(selectedProject.project_id);
       setSelectedProject(project);

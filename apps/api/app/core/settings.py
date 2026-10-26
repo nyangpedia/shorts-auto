@@ -30,6 +30,7 @@ class AppSettings(BaseModel):
     cloudflare_api_token: str = ""
     qwen3_tts_base_url: str = "http://127.0.0.1:7860"
     tts_provider: str = "gemini"
+    visual_style: str = "claymation"
     gemini_image_model: str = "gemini-2.5-flash-image"
     gemini_tts_model: str = "gemini-3.8-flash-tts"
     gemini_tts_voice: str = "Kore"
@@ -80,6 +81,7 @@ ENV_TO_FIELD = {
     "CLOUDFLARE_API_TOKEN": "cloudflare_api_token",
     "QWEN3_TTS_BASE_URL": "qwen3_tts_base_url",
     "TTS_PROVIDER": "tts_provider",
+    "VISUAL_STYLE": "visual_style",
     "GEMINI_IMAGE_MODEL": "gemini_image_model",
     "GEMINI_TTS_MODEL": "gemini_tts_model",
     "GEMINI_TTS_VOICE": "gemini_tts_voice",

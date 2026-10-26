@@ -247,6 +247,20 @@ h2 {
   min-width: 220px;
 }
 
+.style-picker {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.style-picker label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
 .title-edit {
   display: flex;
   gap: 8px;

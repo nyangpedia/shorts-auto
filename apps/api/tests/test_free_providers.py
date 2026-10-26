@@ -100,3 +100,33 @@ def test_cloudflare_retries_transient_400(tmp_path, monkeypatch):
     target = tmp_path / "x.png"
     service._generate_cloudflare_image(AppSettings(cloudflare_account_id="a", cloudflare_api_token="t"), "p", target)
     assert target.read_bytes() == b"img"
+
+
+def test_concept_prompt_uses_selected_style(tmp_path, monkeypatch):
+    import json as _json
+    from app.core.settings import AppSettings
+    from app.production import service
+
+    (tmp_path / "final_script.md").write_text("첫 문장입니다. 두 번째 문장입니다.", encoding="utf-8")
+    seen = {}
+    reply = {"concept_kit": {"visual_style": "x"}, "video_scenes": [
+        {"scene_id": 1, "start": 0, "end": 2, "narration": "첫 문장입니다."}]}
+
+    def create(**kw):
+        seen["prompt"] = kw["messages"][0]["content"]
+        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=_json.dumps(reply)))])
+
+    monkeypatch.setattr(service, "OpenAI", lambda **kw: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
+    monkeypatch.setattr(service, "calibrate_scenes_with_stt", lambda scenes, stt, dur: scenes)
+    kit, _ = service.generate_concept_kit_and_video_scenes(tmp_path, AppSettings(), "webtoon")
+    assert "Korean webtoon" in seen["prompt"] and "clay" not in seen["prompt"].lower()
+    assert kit.style_id == "webtoon"
+    assert _json.loads((tmp_path / "concept_kit.json").read_text(encoding="utf-8"))["style_id"] == "webtoon"
+
+
+def test_unknown_style_rejected():
+    import pytest
+    from app.production.styles import get_style
+
+    with pytest.raises(ValueError):
+        get_style("nope")
