@@ -43,7 +43,7 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - Cloudflare 토큰은 반드시 Workers AI → Use REST API → "Create a Workers AI API Token"으로 만든 것 (일반 토큰은 401)
 
 ## 남은 일
-- 정사각형→세로 크롭 시 양옆 잘림 있음 → 블러 배경 채우기(A) 또는 프롬프트에 중앙 배치(B) 중 결정 대기
+- 정사각형→세로 크롭 시 양옆 잘림 있음 → 블러 배경 채우기(A) 또는 프롬프트에 중앙 배치(B) 중 사용자 확인 결과 거슬리지 않아 보류 (2026-10-26)
 - 첫 영상 품질 검토 → 스톡 검색어를 LLM이 만들게 할지 결정
 - 장르 프리셋 (정보/썰/뉴스/명언)
 - 렌더링 6분 단축 검토
