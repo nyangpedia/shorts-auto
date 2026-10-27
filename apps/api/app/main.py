@@ -16,6 +16,8 @@ from app.references.router import create_references_router
 from app.production.router import create_production_router
 from app.references.youtube import YouTubeClient
 from app.scripts.router import create_scripts_router
+from app.topics.router import create_topics_router
+from app.daily.router import create_daily_router
 
 
 def create_app(
@@ -103,6 +105,8 @@ def create_app(
     )
     app.include_router(create_scripts_router(outputs_dir_provider, settings_provider, analysis_client_factory))
     app.include_router(create_production_router(outputs_dir_provider, settings_provider))
+    app.include_router(create_topics_router(outputs_dir_provider))
+    app.include_router(create_daily_router(outputs_dir_provider, settings_provider, youtube_client_factory))
     return app
 
 

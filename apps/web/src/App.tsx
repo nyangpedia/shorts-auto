@@ -5,7 +5,12 @@ import {
   createProject,
   extractReferenceAudio,
   factCheckScript,
+  fetchDaily,
+  fetchTopics,
   fetchUsage,
+  refreshDaily,
+  saveDailyKeywords,
+  startTopic,
   fetchProductionState,
   fetchProjects,
   fetchReferenceState,
@@ -28,9 +33,14 @@ import {
   updateFinalScript,
   updateProject,
   updateScenePrompts,
+  type DailyItem,
+  type DailyState,
+  type TopicItem,
   type UsageToday
 } from "./api";
 import { AnalysisStep } from "./components/AnalysisStep";
+import { DailyView } from "./components/DailyView";
+import { TopicsView } from "./components/TopicsView";
 import { FinalStep } from "./components/FinalStep";
 import { ReferenceStep } from "./components/ReferenceStep";
 import { ScenesStep } from "./components/ScenesStep";
@@ -67,9 +77,21 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [usageToday, setUsageToday] = useState<UsageToday | null>(null);
+  const [view, setView] = useState<"project" | "topics" | "daily">(() => {
+    const asked = new URLSearchParams(window.location.search).get("view");
+    return asked === "topics" || asked === "daily" ? asked : "project";
+  });
+  const [topics, setTopics] = useState<readonly TopicItem[]>([]);
+  const [daily, setDaily] = useState<DailyState | null>(null);
 
   const refreshUsage = () => void fetchUsage().then(setUsageToday).catch(() => undefined);
   useEffect(refreshUsage, []);
+  const loadTopics = () => void fetchTopics().then((r) => setTopics(r.topics)).catch(() => undefined);
+  useEffect(loadTopics, []);
+  useEffect(() => {
+    if (view === "daily" && !daily) void fetchDaily().then(setDaily).catch((reason) => setError(errorText(reason, "오늘의 레퍼런스를 불러오지 못했습니다.")));
+    if (view === "topics") loadTopics();
+  }, [view]);
 
   const projectId = project?.project_id ?? null;
   const reached = reachedStep(reference, scripts, production);
@@ -152,7 +174,60 @@ export default function App() {
 
   function handleSelectProject(next: Project) {
     setTitleDraft(null);
+    setView("project");
     setProject(next);
+  }
+
+  function openProjectById(id: string) {
+    const found = projects.find((p) => p.project_id === id);
+    if (found) handleSelectProject(found);
+  }
+
+  /** Long actions that start from the topics/daily views (no project selected yet). */
+  async function runGlobal(text: string, action: () => Promise<Project>) {
+    if (busy) return;
+    setBusy({ area: "reference", text });
+    try {
+      const created = await action();
+      setProjects((list) => [created, ...list.filter((p) => p.project_id !== created.project_id)]);
+      handleSelectProject(created);
+      setError(null);
+    } catch (reason) {
+      setError(errorText(reason, "작업에 실패했습니다."));
+    } finally {
+      setBusy(null);
+      refreshUsage();
+      loadTopics();
+    }
+  }
+
+  const handleStartTopic = (topic: TopicItem) =>
+    void runGlobal("주제로 새 프로젝트를 만들고 대본 초안 2개를 쓰는 중… (30초 정도)", async () => {
+      const started = await startTopic(topic);
+      await generateScriptCandidates(started.project.project_id, started.feedback);
+      return getProject(started.project.project_id);
+    });
+
+  const handleUseDaily = (item: DailyItem) =>
+    void runGlobal("이 쇼츠로 새 프로젝트를 만드는 중…", async () => {
+      const created = await createProject(item.title.slice(0, 60));
+      await addDirectReference(created.project_id, item.url);
+      await selectReference(created.project_id, item.video_id);
+      setDaily((d) => (d ? { ...d, items: d.items.map((i) => (i.video_id === item.video_id ? { ...i, used_by: created.project_id } : i)) } : d));
+      return getProject(created.project_id);
+    });
+
+  async function handleDaily(action: () => Promise<DailyState>, text: string) {
+    if (busy) return;
+    setBusy({ area: "reference", text });
+    try {
+      setDaily(await action());
+      setError(null);
+    } catch (reason) {
+      setError(errorText(reason, "오늘의 레퍼런스 작업에 실패했습니다."));
+    } finally {
+      setBusy(null);
+    }
   }
 
   async function handleSaveTitle() {
@@ -282,13 +357,19 @@ export default function App() {
           <span aria-hidden="true" className="brand-mark">▶</span>
           <span>{APP_NAME}<small>쇼츠 제작 도구</small></span>
         </div>
-        <button className="new-project" onClick={handleCreateProject} type="button">+ 새 프로젝트</button>
+        <button className="new-project" onClick={() => { setView("project"); void handleCreateProject(); }} type="button">+ 새 프로젝트</button>
+        <button aria-current={view === "daily" ? "page" : undefined} className="proj rail-link" onClick={() => setView("daily")} type="button">
+          <span aria-hidden="true">📌</span><span><b>오늘의 레퍼런스</b></span>
+        </button>
+        <button aria-current={view === "topics" ? "page" : undefined} className="proj rail-link" onClick={() => setView("topics")} type="button">
+          <span aria-hidden="true">🗂</span><span><b>주제 창고</b><small>남은 주제 {topics.filter((t) => !t.used_by).length}개</small></span>
+        </button>
         <div className="rail-label">프로젝트</div>
         <div className="proj-list">
           {projects.length === 0 && !isLoading ? <p className="rail-empty">아직 프로젝트가 없습니다.</p> : null}
           {projects.map((item) => (
             <button
-              aria-current={item.project_id === projectId ? "page" : undefined}
+              aria-current={view === "project" && item.project_id === projectId ? "page" : undefined}
               className="proj"
               key={item.project_id}
               onClick={() => handleSelectProject(item)}
@@ -311,7 +392,26 @@ export default function App() {
       </aside>
 
       <section className="main">
-        {project ? (
+        {view !== "project" ? (
+          <div className="body">
+            {error ? (
+              <div className="banner bad" role="alert">⚠️ {error} <button className="link-btn" onClick={() => setError(null)} type="button">닫기</button></div>
+            ) : null}
+            {view === "topics" ? (
+              <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
+            ) : (
+              <DailyView
+                busyText={busy?.text ?? null}
+                daily={daily}
+                isBusy={busy !== null}
+                onOpenProject={openProjectById}
+                onRefresh={(force) => void handleDaily(() => refreshDaily(force), "최근 7일 쇼츠 검색 중…")}
+                onSaveKeywords={(keywords) => void handleDaily(() => saveDailyKeywords(keywords), "저장 중…")}
+                onUse={handleUseDaily}
+              />
+            )}
+          </div>
+        ) : project ? (
           <>
             <header className="top">
               <div className="titlerow">

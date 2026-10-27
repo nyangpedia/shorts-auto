@@ -39,6 +39,24 @@ describe("App", () => {
     mocked.fetchProductionState.mockResolvedValue(emptyProduction);
     mocked.getProject.mockResolvedValue(project);
     mocked.fetchUsage.mockResolvedValue({ llm: 3, llm_limit: 100, image: 0, image_limit: 200, tts: 1 });
+    mocked.fetchTopics.mockResolvedValue({ topics: [] });
+    mocked.fetchDaily.mockResolvedValue({ keywords: [], fetched_on: null, items: [] });
+  });
+
+  it("starts a saved topic as a new project and writes drafts for it", async () => {
+    const user = userEvent.setup();
+    const topic = { id: "261011_2130:1", source_project_id: "261011_2130", reference_title: "원본", title: "주제 둘", hook: "훅", category: "상식 파괴", analyzed_at: "2026-10-27T10:00", used_by: null };
+    const created = { ...project, project_id: "261011_2140", project_title: "주제 둘" };
+    mocked.fetchTopics.mockResolvedValue({ topics: [topic] });
+    mocked.startTopic.mockResolvedValue({ project: created, feedback: "2번 추천 주제로 작성: 주제 둘" });
+    mocked.getProject.mockResolvedValue(created);
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /주제 창고/ }));
+    await user.click(await screen.findByRole("button", { name: "이 주제로 만들기" }));
+
+    await waitFor(() => expect(mocked.generateScriptCandidates).toHaveBeenCalledWith("261011_2140", "2번 추천 주제로 작성: 주제 둘"));
+    expect(await screen.findByRole("heading", { name: "주제 둘" })).toBeInTheDocument();
   });
   afterEach(() => cleanup());
 

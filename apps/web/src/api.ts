@@ -319,3 +319,47 @@ export interface UsageToday {
 export function fetchUsage(): Promise<UsageToday> {
   return request<UsageToday>("/api/usage");
 }
+
+export interface TopicItem {
+  readonly id: string;
+  readonly source_project_id: string;
+  readonly reference_title: string;
+  readonly title: string;
+  readonly hook: string;
+  readonly category: string;
+  readonly analyzed_at: string;
+  readonly used_by: string | null;
+}
+
+export function fetchTopics(): Promise<{ topics: readonly TopicItem[] }> {
+  return request("/api/topics");
+}
+
+export function startTopic(topic: TopicItem): Promise<{ project: Project; feedback: string }> {
+  const index = topic.id.split(":")[1];
+  return request(`/api/topics/${encodeURIComponent(topic.source_project_id)}/${index}/start`, { method: "POST" });
+}
+
+export interface DailyItem extends ReferenceCandidate {
+  readonly keyword: string;
+  readonly views_per_day: number;
+  readonly used_by: string | null;
+}
+
+export interface DailyState {
+  readonly keywords: readonly string[];
+  readonly fetched_on: string | null;
+  readonly items: readonly DailyItem[];
+}
+
+export function fetchDaily(): Promise<DailyState> {
+  return request("/api/daily-references");
+}
+
+export function saveDailyKeywords(keywords: readonly string[]): Promise<DailyState> {
+  return request("/api/daily-references/keywords", { method: "PUT", body: JSON.stringify({ keywords }) });
+}
+
+export function refreshDaily(force = false): Promise<DailyState> {
+  return request(`/api/daily-references/refresh${force ? "?force=true" : ""}`, { method: "POST" });
+}

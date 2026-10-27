@@ -226,3 +226,6 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--ink-2); fo
 @media (prefers-reduced-motion: reduce) {
   .scene-dot.busy { animation: none; }
 }
+
+.rail-link { grid-template-columns: 34px minmax(0, 1fr); }
+.rail-link > span:first-child { width: 34px; text-align: center; font-size: 18px; }
