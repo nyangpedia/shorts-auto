@@ -181,13 +181,20 @@ class YouTubeClient:
 
         # 1. 키워드가 있는 경우 (채널 지정 시 channelId 파라미터로 해당 채널 내 검색)
         if request.keyword:
+            # A search call costs 100 quota units whether it returns 25 or 50 items, so always take 50;
+            # results are trimmed to max_results after the duration/view filters below.
             base_params = {
                 "part": "snippet",
                 "type": "video",
                 "q": request.keyword,
-                "maxResults": request.max_results,
+                "maxResults": 50,
+                "regionCode": "KR",
+                "relevanceLanguage": "ko",
                 "key": self.api_key,
             }
+            if request.duration_filter in ("under_60", "under_120", "under_180"):
+                # YouTube "short" = under 4 minutes; without it most hits are long videos we'd discard.
+                base_params["videoDuration"] = "short"
             if channel_id:
                 base_params["channelId"] = channel_id
 

@@ -519,3 +519,18 @@ def test_youtube_client_search_by_channel_and_keyword():
     assert recorded_search_params.get("channelId") == "UC1234567890123456789012"
     assert recorded_search_params.get("q") == "투자"
 
+
+
+def test_search_asks_youtube_for_short_korean_videos_in_one_full_page():
+    seen = []
+
+    class Capture(httpx.BaseTransport):
+        def handle_request(self, request):
+            seen.append(dict(request.url.params))
+            return httpx.Response(200, json={"items": []})
+
+    client = YouTubeClient("key", http_client=httpx.Client(transport=Capture()))
+    client.search(ReferenceSearchRequest(keyword="돈", duration_filter="under_180"))
+    client.search(ReferenceSearchRequest(keyword="돈", duration_filter="under_300"))
+    assert seen[0]["videoDuration"] == "short" and seen[0]["maxResults"] == "50" and seen[0]["regionCode"] == "KR"
+    assert "videoDuration" not in seen[-1]
