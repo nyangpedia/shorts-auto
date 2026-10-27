@@ -535,3 +535,31 @@ def test_search_asks_youtube_for_short_korean_videos_in_one_full_page():
     assert seen[0]["videoDuration"] == "short" and seen[0]["maxResults"] == "50"
     assert "regionCode" not in seen[0]  # references are searched worldwide
     assert "videoDuration" not in seen[-1]
+
+
+@pytest.mark.parametrize(
+    ("snippet", "keep"),
+    [
+        ({"title": "돈이 모이는 습관", "defaultAudioLanguage": "ko"}, True),
+        ({"title": "5 Habits to 10x your Money"}, True),
+        ({"title": "お金が貯まる習慣", "defaultAudioLanguage": "ja"}, True),
+        ({"title": "理财习惯", "defaultAudioLanguage": "zh-Hans"}, True),
+        ({"title": "Money habits in English title", "defaultAudioLanguage": "hi"}, False),
+        ({"title": "డబ్బు సంపాదించే 6 పనులు"}, False),
+        ({"title": "पैसे की आदतें"}, False),
+        ({"title": "Unknown language", "defaultAudioLanguage": "und"}, True),
+    ],
+)
+def test_search_keeps_only_readable_reference_languages(snippet, keep):
+    from app.references.youtube import is_readable_language
+
+    assert is_readable_language(snippet) is keep
+
+
+def test_channel_country_or_script_excludes_mislabelled_videos():
+    from app.references.youtube import is_readable_channel
+
+    assert is_readable_channel({"country": "US", "description": "Money tips"})
+    assert is_readable_channel({})
+    assert not is_readable_channel({"country": "IN", "description": "Money tips"})
+    assert not is_readable_channel({"description": "డబ్బు చిట్కాలు"})

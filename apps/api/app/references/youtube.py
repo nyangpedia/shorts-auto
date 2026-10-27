@@ -62,6 +62,29 @@ def chunked(values: list[T], size: int) -> list[list[T]]:
     return [values[index : index + size] for index in range(0, len(values), size)]
 
 
+REFERENCE_LANGUAGES = ("ko", "en", "ja", "zh")
+# Indic scripts (Devanagari … Sinhala), Arabic, Thai — titles the user can't read to pick a reference.
+_UNREADABLE_SCRIPTS = re.compile("[ऀ-෿؀-ۿ฀-๿]")
+
+
+def is_readable_language(snippet: dict) -> bool:
+    """Search results only: keep ko/en/ja/zh. Many videos don't declare a language, so the title script is the fallback."""
+    declared = (snippet.get("defaultAudioLanguage") or snippet.get("defaultLanguage") or "").split("-")[0].lower()
+    if declared and declared not in REFERENCE_LANGUAGES and declared not in ("und", "zxx"):
+        return False
+    return not _UNREADABLE_SCRIPTS.search(snippet.get("title", ""))
+
+
+EXCLUDED_CHANNEL_COUNTRIES = ("IN", "PK", "BD")
+
+
+def is_readable_channel(channel_snippet: dict) -> bool:
+    """Some channels label videos "en" with English titles but narrate in Telugu/Hindi; the channel gives it away."""
+    if channel_snippet.get("country") in EXCLUDED_CHANNEL_COUNTRIES:
+        return False
+    return not _UNREADABLE_SCRIPTS.search(channel_snippet.get("description", ""))
+
+
 def parse_search_date(value: str | None) -> date | None:
     if value is None:
         return None
@@ -296,7 +319,8 @@ class YouTubeClient:
             for channel_id_batch in chunked(channel_ids, YOUTUBE_BATCH_SIZE):
                 channels_response = self.http_client.get(
                     "https://www.googleapis.com/youtube/v3/channels",
-                    params={"part": "statistics", "id": ",".join(channel_id_batch), "key": self.api_key},
+                    # snippet costs no extra quota here and carries country/description for the language filter
+                    params={"part": "snippet,statistics", "id": ",".join(channel_id_batch), "key": self.api_key},
                 )
                 channels_response.raise_for_status()
                 channels.update(
@@ -323,6 +347,8 @@ class YouTubeClient:
                 )
 
                 if request and not request.matches_duration(duration_seconds):
+                    continue
+                if request and not (is_readable_language(snippet) and is_readable_channel(channel.get("snippet", {}))):
                     continue
                 if request and view_count < request.minimum_views:
                     continue
