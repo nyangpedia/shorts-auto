@@ -321,7 +321,7 @@ def align_subtitles_and_scenes_for_project(project_dir: Path, settings: AppSetti
     try:
         if settings.use_faster_whisper:
             from app.references.openai_clients import FasterWhisperClient
-            raw_segments = FasterWhisperClient(settings.whisper_model, settings.whisper_device).transcribe(target_path)["segments"]
+            raw_segments = FasterWhisperClient(settings.whisper_model, settings.whisper_device, "ko").transcribe(target_path)["segments"]
         else:
             with open(target_path, "rb") as audio_file:
                 transcript = client.audio.transcriptions.create(

@@ -188,8 +188,6 @@ class YouTubeClient:
                 "type": "video",
                 "q": request.keyword,
                 "maxResults": 50,
-                "regionCode": "KR",
-                "relevanceLanguage": "ko",
                 "key": self.api_key,
             }
             if request.duration_filter in ("under_60", "under_120", "under_180"):

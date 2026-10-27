@@ -5,17 +5,23 @@ from app.references.openai_clients import FasterWhisperClient
 
 
 class FakeModel:
+    def __init__(self):
+        self.asked_language = "unset"
+
     def transcribe(self, path, language):
+        self.asked_language = language
         segs = (SimpleNamespace(start=i, end=i + 1, text=f" 문장{i}") for i in range(2))
-        return segs, SimpleNamespace(duration=2.0)
+        return segs, SimpleNamespace(duration=2.0, language="en")
 
 
-def test_segments_survive_generator():
+def test_segments_survive_generator_and_language_is_auto_detected():
     client = FasterWhisperClient.__new__(FasterWhisperClient)
     client.whisper_model = FakeModel()
+    client.language = None
     out = client.transcribe(Path("x.wav"))
     assert [s["text"] for s in out["segments"]] == [" 문장0", " 문장1"]
     assert out["text"] == "문장0 문장1"
+    assert client.whisper_model.asked_language is None and out["language"] == "en"
 
 
 def test_analysis_strips_code_fence_for_compatible_providers():

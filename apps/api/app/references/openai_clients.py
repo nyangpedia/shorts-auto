@@ -48,18 +48,20 @@ def _load_whisper(model: str, device: str) -> WhisperModel:
 
 
 class FasterWhisperClient:
-    def __init__(self, model: str = "base", device: str = "cpu"):
+    def __init__(self, model: str = "base", device: str = "cpu", language: str | None = None):
+        # None = auto-detect (references can be foreign); our own narration passes "ko".
         self.whisper_model = _load_whisper(model, device)
+        self.language = language
 
     def transcribe(self, audio_path: Path) -> dict:
-        segments, info = self.whisper_model.transcribe(str(audio_path), language="ko")
+        segments, info = self.whisper_model.transcribe(str(audio_path), language=self.language)
         segments_list = [
             {"id": i, "start": s.start, "end": s.end, "text": s.text}
             for i, s in enumerate(segments)
         ]
         return {
             "task": "transcribe",
-            "language": "ko",
+            "language": info.language,
             "duration": info.duration,
             "text": " ".join(seg["text"].strip() for seg in segments_list),
             "segments": segments_list,

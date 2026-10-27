@@ -532,5 +532,6 @@ def test_search_asks_youtube_for_short_korean_videos_in_one_full_page():
     client = YouTubeClient("key", http_client=httpx.Client(transport=Capture()))
     client.search(ReferenceSearchRequest(keyword="돈", duration_filter="under_180"))
     client.search(ReferenceSearchRequest(keyword="돈", duration_filter="under_300"))
-    assert seen[0]["videoDuration"] == "short" and seen[0]["maxResults"] == "50" and seen[0]["regionCode"] == "KR"
+    assert seen[0]["videoDuration"] == "short" and seen[0]["maxResults"] == "50"
+    assert "regionCode" not in seen[0]  # references are searched worldwide
     assert "videoDuration" not in seen[-1]
