@@ -294,3 +294,28 @@ export function updateScenePrompts(
     }
   );
 }
+
+export function updateFinalScript(projectId: string, finalScript: string): Promise<ScriptsState> {
+  return request<ScriptsState>(`/api/projects/${encodeURIComponent(projectId)}/scripts/final`, {
+    method: "PUT",
+    body: JSON.stringify({ final_script: finalScript })
+  });
+}
+
+export function factCheckScript(projectId: string): Promise<ScriptsState> {
+  return request<ScriptsState>(`/api/projects/${encodeURIComponent(projectId)}/scripts/factcheck`, {
+    method: "POST"
+  });
+}
+
+export interface UsageToday {
+  readonly llm: number;
+  readonly llm_limit: number | null;
+  readonly image: number;
+  readonly image_limit: number | null;
+  readonly tts: number;
+}
+
+export function fetchUsage(): Promise<UsageToday> {
+  return request<UsageToday>("/api/usage");
+}

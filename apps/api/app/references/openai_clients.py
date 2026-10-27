@@ -11,6 +11,7 @@ from types import SimpleNamespace
 from openai import APIConnectionError, APIStatusError, NotFoundError, OpenAI, RateLimitError
 from faster_whisper import WhisperModel
 
+from app.core import usage
 from app.references.files import write_reference_raw_stt, write_reference_script
 
 logger = logging.getLogger(__name__)
@@ -84,7 +85,9 @@ class FallbackLLM:
         models = [model] + [m for m in self._fallbacks if m != model]
         for i, name in enumerate(models):
             try:
-                return self._client.chat.completions.create(model=name, **kwargs)
+                response = self._client.chat.completions.create(model=name, **kwargs)
+                usage.record("llm")
+                return response
             except APIStatusError as exc:
                 retryable = isinstance(exc, self._RETRYABLE) or exc.status_code >= 500
                 if not retryable or i == len(models) - 1:

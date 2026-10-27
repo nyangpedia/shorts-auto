@@ -6,6 +6,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core.paths import find_repo_root
+from app.core import usage
 from app.core.settings import load_settings
 from app.jobs.router import create_jobs_router
 from app.projects.router import create_projects_router
@@ -39,8 +40,9 @@ def create_app(
 
     outputs_dir = root / settings.output_dir
     outputs_dir.mkdir(parents=True, exist_ok=True)
+    usage.configure(outputs_dir)
 
-    app = FastAPI(title="Shorts Auto API")
+    app = FastAPI(title="HookLab API")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],
@@ -58,6 +60,19 @@ def create_app(
     @app.get("/api/health")
     def health():
         return {"ok": True}
+
+    @app.get("/api/usage")
+    def usage_today():
+        # Free-tier caps observed in 2026-10: ~20 requests/day per Gemini model, ~200 FLUX images/day on Workers AI.
+        gemini = "generativelanguage" in settings.llm_base_url
+        counts = usage.today()
+        return {
+            "llm": counts["llm"],
+            "llm_limit": 20 * (1 + len(settings.llm_fallback_list)) if gemini else None,
+            "image": counts["image"],
+            "image_limit": 200 if settings.cloudflare_account_id else None,
+            "tts": counts["tts"],
+        }
 
     @app.get("/api/settings/status")
     def settings_status():

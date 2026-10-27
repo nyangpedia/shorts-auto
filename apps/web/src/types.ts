@@ -147,7 +147,22 @@ export interface TtsValidationResult {
   readonly issues: readonly string[];
 }
 
+export type FactVerdict = "확실" | "논란" | "의심";
+
+export interface FactCheckClaim {
+  readonly quote: string;
+  readonly verdict: FactVerdict;
+  readonly reason: string;
+  readonly search_query: string;
+}
+
+export interface FactCheckResult {
+  readonly script_hash: string;
+  readonly claims: readonly FactCheckClaim[];
+}
+
 export interface ScriptsState {
+  readonly fact_check?: FactCheckResult | null;
   readonly candidates: readonly ScriptCandidate[];
   readonly selected_candidate: ScriptCandidate | null;
   readonly final_script: string | null;

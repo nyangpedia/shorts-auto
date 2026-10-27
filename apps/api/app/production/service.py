@@ -14,6 +14,7 @@ from openai import OpenAI
 
 from app.core.paths import find_repo_root
 from app.core.settings import AppSettings
+from app.core import usage
 from app.production.styles import get_style
 from app.references.openai_clients import make_llm_client
 from app.production.models import (
@@ -159,6 +160,7 @@ def _generate_gemini_tts(project_dir: Path, script_text: str, settings: AppSetti
     )
     temp_wav = project_dir / "temp_tts_raw.wav"
     temp_wav.write_bytes(base64.b64decode(interaction.output_audio.data))
+    usage.record("tts")
     final_wav = project_dir / TTS_AUDIO_FILENAME
     try:
         _change_audio_speed(temp_wav, final_wav, rate=SPEED_RATE)
@@ -892,6 +894,7 @@ def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path)
         time.sleep(2 * (attempt + 1))
     resp.raise_for_status()
     target.write_bytes(base64.b64decode(resp.json()["result"]["image"]))
+    usage.record("image")
 
 
 def _generate_gemini_image(settings: AppSettings, prompt: str, target: Path) -> None:
