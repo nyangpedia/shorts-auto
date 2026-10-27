@@ -391,6 +391,7 @@ export default function App() {
                   busyText={busyFor("script")}
                   candidates={scripts?.candidates ?? []}
                   factCheck={scripts?.fact_check ?? null}
+                  similarity={scripts?.similarity ?? null}
                   finalScript={scripts?.final_script ?? null}
                   isBusy={busy !== null}
                   onFactCheck={handleFactCheck}

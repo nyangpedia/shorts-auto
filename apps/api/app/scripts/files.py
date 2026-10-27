@@ -143,7 +143,18 @@ def read_script_state(project_dir: Path) -> ScriptsState:
         feedback=final_state.feedback if final_state else "",
         tts_validation=final_state.tts_validation if final_state else None,
         fact_check=read_fact_check(project_dir, final_state.final_script if final_state else None),
+        similarity=_similarity(project_dir, final_state.final_script if final_state else None),
     )
+
+
+def _similarity(project_dir: Path, final_script: str | None):
+    from app.references.files import REFERENCE_SCRIPT_FILE  # local import: references.files imports this module
+    from app.scripts.similarity import check_similarity
+
+    reference_path = project_dir / REFERENCE_SCRIPT_FILE
+    if not final_script or not reference_path.exists():
+        return None
+    return check_similarity(final_script, reference_path.read_text(encoding="utf-8"))
 
 
 def clear_script_outputs(project_dir: Path) -> None:

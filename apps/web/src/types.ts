@@ -161,8 +161,16 @@ export interface FactCheckResult {
   readonly claims: readonly FactCheckClaim[];
 }
 
+export interface SimilarityResult {
+  readonly score: number;
+  readonly level: "낮음" | "주의" | "높음" | "비교 불가";
+  readonly comparable: boolean;
+  readonly sentences: readonly { readonly text: string; readonly score: number }[];
+}
+
 export interface ScriptsState {
   readonly fact_check?: FactCheckResult | null;
+  readonly similarity?: SimilarityResult | null;
   readonly candidates: readonly ScriptCandidate[];
   readonly selected_candidate: ScriptCandidate | null;
   readonly final_script: string | null;

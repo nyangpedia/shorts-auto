@@ -47,7 +47,8 @@ describe("ScriptStep", () => {
     busyText: null,
     onSelect: vi.fn(),
     onFinalize: vi.fn(),
-    onFactCheck: vi.fn()
+    onFactCheck: vi.fn(),
+    similarity: null
   };
 
   it("saves only after editing and blocks fact check on unsaved text", async () => {
@@ -76,6 +77,15 @@ describe("ScriptStep", () => {
     await user.click(screen.getByText("노예가 지었다"));
     const editor = screen.getByRole("textbox", { name: "최종 대본" }) as HTMLTextAreaElement;
     expect(editor.value.slice(editor.selectionStart, editor.selectionEnd)).toBe("노예가 지었다");
+  });
+});
+
+describe("ScriptStep similarity", () => {
+  it("shows the overlap level and the copied sentence", () => {
+    const similarity = { score: 0.42, level: "높음" as const, comparable: true, sentences: [{ text: "피라미드는 노예가 지었다.", score: 0.9 }] };
+    render(<ScriptStep candidates={[candidate]} selectedCandidateId="draft_a" finalScript="피라미드는 노예가 지었다." factCheck={null} similarity={similarity} ttsValidation={null} isBusy={false} busyText={null} onSelect={vi.fn()} onFinalize={vi.fn()} onSave={vi.fn()} onFactCheck={vi.fn()} />);
+    expect(screen.getByText("높음 · 42%")).toBeInTheDocument();
+    expect(screen.getByText("원본과 거의 같음")).toBeInTheDocument();
   });
 });
 

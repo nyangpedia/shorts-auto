@@ -114,6 +114,18 @@ class FactCheckResult(BaseModel):
     claims: list[FactCheckClaim] = Field(default_factory=list)
 
 
+class SimilarSentence(BaseModel):
+    text: str
+    score: float
+
+
+class SimilarityResult(BaseModel):
+    score: float
+    level: Literal["낮음", "주의", "높음", "비교 불가"]
+    comparable: bool
+    sentences: list[SimilarSentence] = Field(default_factory=list)
+
+
 class UpdateFinalScriptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -129,6 +141,7 @@ class ScriptsState(BaseModel):
     feedback: str = ""
     tts_validation: Optional[TtsValidationResult] = None
     fact_check: Optional[FactCheckResult] = None
+    similarity: Optional[SimilarityResult] = None
 
 
 class SelectScriptCandidateRequest(BaseModel):

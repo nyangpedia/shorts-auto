@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 
-import type { FactCheckResult, FactVerdict, ScriptCandidate, TtsValidationResult } from "../types";
+import type { FactCheckResult, FactVerdict, ScriptCandidate, SimilarityResult, TtsValidationResult } from "../types";
 
 interface ScriptStepProps {
   readonly candidates: readonly ScriptCandidate[];
   readonly selectedCandidateId: string | null;
   readonly finalScript: string | null;
   readonly factCheck: FactCheckResult | null;
+  readonly similarity: SimilarityResult | null;
   readonly ttsValidation: TtsValidationResult | null;
   readonly isBusy: boolean;
   readonly busyText: string | null;
@@ -17,10 +18,11 @@ interface ScriptStepProps {
 }
 
 const VERDICT_CHIP: Record<FactVerdict, string> = { 의심: "bad", 논란: "warn", 확실: "ok" };
+const SIMILARITY_CHIP: Record<SimilarityResult["level"], string> = { 낮음: "ok", 주의: "warn", 높음: "bad", "비교 불가": "" };
 const LABEL: Record<string, string> = { draft_a: "초안 A · 상식 충돌형", draft_b: "초안 B · 스토리텔링형" };
 
 export function ScriptStep(props: ScriptStepProps) {
-  const { candidates, selectedCandidateId, finalScript, factCheck, ttsValidation, isBusy, busyText } = props;
+  const { candidates, selectedCandidateId, finalScript, factCheck, similarity, ttsValidation, isBusy, busyText } = props;
   const [draft, setDraft] = useState(finalScript ?? "");
   const [feedback, setFeedback] = useState("");
   const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -90,6 +92,35 @@ export function ScriptStep(props: ScriptStepProps) {
                 <span className="muted small">{draft.length}자 · 약 {Math.round(draft.length / 9)}초</span>
               </div>
             </>
+          )}
+        </div>
+      )}
+
+      {finalScript && similarity && !dirty && (
+        <div className="card">
+          <div className="section-head">
+            <h2>원본과 겹침</h2>
+            <span className={`chip ${SIMILARITY_CHIP[similarity.level]}`}>
+              {similarity.comparable ? `${similarity.level} · ${Math.round(similarity.score * 100)}%` : "비교 불가"}
+            </span>
+            <p>
+              {similarity.comparable
+                ? "레퍼런스 자막과 글자가 겹치는 비율입니다. 15% 아래를 권합니다."
+                : "레퍼런스가 다른 언어라 문장 비교가 안 됩니다. 번역해서 옮긴 것도 2차 저작물이니 구성·사례까지 그대로 따라가지 마세요."}
+            </p>
+          </div>
+          {similarity.sentences.length > 0 && (
+            <div className="claims">
+              {similarity.sentences.map((s, i) => (
+                <div className="claim" key={i}>
+                  <span className="chip warn">{Math.round(s.score * 100)}%</span>
+                  <button className="link-btn" onClick={() => jumpTo(s.text)} style={{ padding: 0, color: "inherit", textAlign: "left" }} type="button">
+                    <q>{s.text}</q>
+                  </button>
+                  <span className="muted small">원본과 거의 같음</span>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}
