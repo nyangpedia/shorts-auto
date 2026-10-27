@@ -43,7 +43,7 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 전체 자동 점검: `tools/dev/e2e_smoke.py <레퍼런스 음성.wav>` (서버 켠 상태에서, Gemini 한도 5~6회 소모)
 - 테스트 프로젝트: `outputs/261023_1711`(피라미드, 웹툰 화풍). `outputs/261026_1249`는 **사용자 작업용이라 건드리지 말 것**
 
-## 2026-10-27 작업 (앱 이름 "훅랩", 설치형 배포 목표)
+## 2026-10-27 작업 (앱 이름 "쇼츠공방", 설치형 배포 목표)
 - 화면 전면 개편: 6단계 마법사(레퍼런스→분석→대본→음성·화풍→이미지·영상→완성). `apps/web/src/App.tsx` + `components/*Step.tsx`, 단계 계산 `wizard.ts`
   - 주소 `?project=<id>&step=<1-6>`로 특정 화면 바로 열기 (헤드리스 캡처 확인용으로도 씀)
 - 대본: 정확성 최우선 규칙 추가(소수설 단정 금지), 직접 편집 `PUT /scripts/final`, AI 사실 확인 `POST /scripts/factcheck`

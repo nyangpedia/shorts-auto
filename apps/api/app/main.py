@@ -42,7 +42,7 @@ def create_app(
     outputs_dir.mkdir(parents=True, exist_ok=True)
     usage.configure(outputs_dir)
 
-    app = FastAPI(title="HookLab API")
+    app = FastAPI(title="Shorts Gongbang API")
     app.add_middleware(
         CORSMiddleware,
         allow_origins=["http://127.0.0.1:5173", "http://localhost:5173"],

@@ -39,7 +39,7 @@ import { VoiceStep } from "./components/VoiceStep";
 import type { ProductionState, Project, ReferenceSearchPayload, ReferenceState, ScriptsState, StepName } from "./types";
 import { STEPS, reachedStep, type StepNumber } from "./wizard";
 
-export const APP_NAME = "훅랩";
+export const APP_NAME = "쇼츠공방";
 
 type Area = "reference" | "analysis" | "script" | "production";
 
