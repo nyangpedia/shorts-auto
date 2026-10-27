@@ -27,17 +27,21 @@ from app.scripts.files import (
     write_script_candidates,
     write_selected_script_candidate,
 )
+from app.scripts.files import FACT_CHECK_FILE, read_final_script_state, write_fact_check
 from app.scripts.generation import (
     build_candidate_generation_prompt,
+    build_fact_check_prompt,
     build_final_script_prompt,
     build_final_script_state,
     extract_final_script,
+    parse_fact_check,
     validate_candidate_payload,
 )
 from app.scripts.models import (
     FinalizeScriptRequest,
     GenerateCandidatesRequest,
     SelectScriptCandidateRequest,
+    UpdateFinalScriptRequest,
 )
 
 
@@ -243,5 +247,62 @@ def create_scripts_router(
             message = str(exc) or exc.__class__.__name__
             fail_job(outputs, project_id, job_id, message)
             raise HTTPException(status_code=400, detail=message) from exc
+
+    @router.put("/final")
+    def update_final_script(
+        project_id: str,
+        payload: UpdateFinalScriptRequest,
+        outputs: Path = Depends(outputs_dir_provider),
+    ):
+        try:
+            path = project_dir(outputs, project_id)
+            current = read_final_script_state(path)
+            if current is None:
+                raise HTTPException(status_code=400, detail="먼저 대본을 확정해주세요.")
+            if current.final_script.strip() == payload.final_script.strip():
+                return read_script_state(path).model_dump()
+            state = build_final_script_state(current.selected_candidate_id, current.feedback, payload.final_script)
+            write_final_script_state(path, state)
+
+            project = read_project(outputs, project_id)
+            for status in project.step_statuses:
+                if status.name == "Script":
+                    status.message = "대본을 직접 수정했습니다."
+                elif status.name == "Production" and status.state == "succeeded":
+                    status.state = "waiting"
+                    status.message = "대본이 바뀌었습니다. 음성과 씬을 다시 만들어주세요."
+            save_project(outputs, project)
+            return read_script_state(path).model_dump()
+        except HTTPException:
+            raise
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Project not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    @router.post("/factcheck")
+    def fact_check_script(
+        project_id: str,
+        outputs: Path = Depends(outputs_dir_provider),
+        settings: AppSettings = Depends(settings_provider),
+    ):
+        try:
+            path = project_dir(outputs, project_id)
+            current = read_final_script_state(path)
+            if current is None:
+                raise HTTPException(status_code=400, detail="먼저 대본을 확정해주세요.")
+            client = script_client_factory(settings.llm_api_key, settings.openai_analysis_model)
+            result = parse_fact_check(client.analyze(build_fact_check_prompt(current.final_script)), current.final_script)
+            write_fact_check(path, result)
+            project = read_project(outputs, project_id)
+            project.generated_files["fact_check"] = FACT_CHECK_FILE
+            save_project(outputs, project)
+            return read_script_state(path).model_dump()
+        except HTTPException:
+            raise
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Project not found") from exc
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc) or exc.__class__.__name__) from exc
 
     return router

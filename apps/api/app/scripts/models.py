@@ -95,6 +95,31 @@ class FinalScriptState(BaseModel):
         return clean_text(value, info.field_name, max_length)
 
 
+FactVerdict = Literal["확실", "논란", "의심"]
+
+
+class FactCheckClaim(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+
+    quote: str = Field(max_length=300)
+    verdict: FactVerdict
+    reason: str = Field(max_length=500)
+    search_query: str = Field(default="", max_length=200)
+
+
+class FactCheckResult(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    script_hash: str
+    claims: list[FactCheckClaim] = Field(default_factory=list)
+
+
+class UpdateFinalScriptRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    final_script: str = Field(min_length=1, max_length=FINAL_SCRIPT_MAX_LENGTH)
+
+
 class ScriptsState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -103,6 +128,7 @@ class ScriptsState(BaseModel):
     final_script: Optional[str] = None
     feedback: str = ""
     tts_validation: Optional[TtsValidationResult] = None
+    fact_check: Optional[FactCheckResult] = None
 
 
 class SelectScriptCandidateRequest(BaseModel):

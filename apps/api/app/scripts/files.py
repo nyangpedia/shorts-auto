@@ -5,19 +5,40 @@ import os
 import tempfile
 from pathlib import Path
 
-from app.scripts.models import FinalScriptState, ScriptCandidate, ScriptsState
+import hashlib
+
+from app.scripts.models import FactCheckResult, FinalScriptState, ScriptCandidate, ScriptsState
 
 
 SCRIPT_CANDIDATES_FILE = "candidates.json"
 SELECTED_SCRIPT_CANDIDATE_FILE = "selected_script_candidate.json"
 FINAL_SCRIPT_FILE = "final_script.md"
 FINAL_SCRIPT_STATE_FILE = "final_script_state.json"
+FACT_CHECK_FILE = "fact_check.json"
 SCRIPT_OUTPUT_FILES = [
     SCRIPT_CANDIDATES_FILE,
     SELECTED_SCRIPT_CANDIDATE_FILE,
     FINAL_SCRIPT_FILE,
     FINAL_SCRIPT_STATE_FILE,
+    FACT_CHECK_FILE,
 ]
+
+
+def script_hash(script: str) -> str:
+    return hashlib.sha1(script.strip().encode("utf-8")).hexdigest()
+
+
+def write_fact_check(project_dir: Path, result: FactCheckResult) -> None:
+    _write_json(project_dir / FACT_CHECK_FILE, result.model_dump())
+
+
+def read_fact_check(project_dir: Path, current_script: str | None) -> FactCheckResult | None:
+    """Returns the saved check only if it was made for the current script text."""
+    path = project_dir / FACT_CHECK_FILE
+    if not current_script or not path.exists():
+        return None
+    result = FactCheckResult.model_validate_json(path.read_text(encoding="utf-8"))
+    return result if result.script_hash == script_hash(current_script) else None
 
 
 def _write_text(path: Path, payload: str) -> None:
@@ -121,6 +142,7 @@ def read_script_state(project_dir: Path) -> ScriptsState:
         final_script=final_state.final_script if final_state else None,
         feedback=final_state.feedback if final_state else "",
         tts_validation=final_state.tts_validation if final_state else None,
+        fact_check=read_fact_check(project_dir, final_state.final_script if final_state else None),
     )
 
 

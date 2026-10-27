@@ -8,6 +8,8 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_valida
 
 from app.scripts.models import (
     FINAL_SCRIPT_MAX_LENGTH,
+    FactCheckClaim,
+    FactCheckResult,
     FinalScriptState,
     ScriptCandidate,
     TtsValidationResult,
@@ -121,7 +123,13 @@ def build_candidate_generation_prompt(
 이번 대본은 레퍼런스 쇼츠(예: "모기 주둥이 안 6개 바늘, 초당 30번 진동 톱날, 물 한 방울의 25분의 1인 2마이크로리터, 전 세계 1000조 마리 모기가 빨아먹는 피 160억 리터, 올림픽 수영장 6,400개")처럼,
 **시청자가 1초도 눈을 뗄 수 없는 정밀한 팩트와 충격적인 체감 환산 수치**를 반드시 담아야 합니다.
 
-### [대본 작성 4대 절대 규칙]
+### [대본 작성 절대 규칙]
+0. ✅ 정확성이 훅보다 우선 (최우선 — 아래 모든 규칙보다 앞섬):
+   - 학계·공식 기관에서 정설로 받아들여진 사실만 단정형("~입니다")으로 쓰세요.
+   - 소수설·가설·논쟁 중인 주장은 반드시 "일부 학자들은 ~라고 주장합니다", "~라는 가설도 있습니다"처럼 그 성격을 밝히세요. 정설을 "거짓말", "다 틀렸다"로 몰지 마세요.
+   - 기억이 확실하지 않은 숫자는 지어내지 마세요. 어림값이면 "약", "~정도"를 붙이세요. 숫자를 부풀려 자극을 키우는 것은 금지입니다.
+   - 상식 충돌 훅은 사실을 왜곡하지 않는 범위에서만 쓰세요. 확신이 없으면 "정말 그럴까요?"처럼 질문형 훅으로 바꾸세요.
+
 1. 🎯 정밀한 마이크로 팩트 & 구조적 디테일 (Micro Facts & Detail):
    - "엄청 빠릅니다", "놀랍습니다", "대단합니다" 같은 추상적이고 뻔한 수식어는 절대 금지!
    - 해당 주제의 미세한 과학적/생물학적/물리적 메커니즘과 정밀한 수치를 최소 2개 이상 구체적으로 포함하세요.
@@ -147,7 +155,7 @@ def build_candidate_generation_prompt(
 - Draft A (candidate_id: "draft_a", candidate_type: "draft_a"):
   * 소재: 위 [선택된 확정 주제] 100% 적용 (절대 원본 레퍼런스 소재로 쓰지 말 것!)
   * 컨셉: [도파민 폭발 / 상식 충돌 & 충격 수치형 (텐션형)]
-  * 연출: 빠른 템포와 쉴 틈 없는 수치 폭격! 시청각적 상상력을 자극하는 거대한 스케일 비교 중심. 위 선택된 주제와 관련된 일반인의 당연한 상식을 단숨에 부수고 구체적인 과학적 팩트와 충격 환산 수치를 쏟아부으세요.
+  * 연출: 빠른 템포와 쉴 틈 없는 수치 폭격! 시청각적 상상력을 자극하는 거대한 스케일 비교 중심. 위 선택된 주제와 관련된 일반인의 오해를 짚고, 검증된 과학적 팩트와 체감 환산 수치로 뒤집으세요. (규칙 0을 어기면서까지 상식을 부수지는 마세요.)
 - Draft B (candidate_id: "draft_b", candidate_type: "draft_b"):
   * 소재: 위 [선택된 확정 주제] 100% 적용
   * 컨셉: [호기심 뇌절 / 미스터리 & 단계적 반전형 (스토리텔링형)]
@@ -240,6 +248,7 @@ Return JSON only with this exact shape:
 }}
 
 핵심 원칙:
+0. 정확성: 초안에서 소수설·가설을 정설처럼 단정한 표현이 있으면 "~라는 주장도 있습니다"처럼 고치세요. 새 숫자나 사실을 지어내지 마세요.
 1. 분량 유지: 공백 포함 400~520자 내외. 핵심 팩트와 수치, 예시를 절대 생략하지 마세요.
 2. 구어체 리듬감: 말하듯이 자연스럽고 호흡이 살아있는 구어체 문장으로 다듬되, 쉼표(,)와 마침표(.)를 적절히 배치하여 낭독 시 적절한 호흡과 강세를 살리세요.
 
@@ -329,3 +338,44 @@ def build_final_script_state(
         final_script=final_script,
         tts_validation=validate_final_script(final_script),
     )
+
+
+def build_fact_check_prompt(script: str) -> str:
+    return f"""
+당신은 꼼꼼한 한국어 팩트체커입니다. 아래 유튜브 쇼츠 내레이션 대본에서 **사실 주장**(숫자, 역사적 사건, 과학적 설명, 인과관계 단정)을 모두 찾아 하나씩 판정하세요.
+의견·감탄·질문은 제외합니다. 검색 도구가 없으니 당신의 지식으로 판단하되, 확신이 없으면 "의심"으로 표시하세요. 모르는 것을 확실하다고 하지 마세요.
+
+판정 기준:
+- "확실": 학계·공식 기관에서 널리 받아들여진 사실이고 숫자도 맞음
+- "논란": 소수설·가설·학자 간 논쟁이 있는데 대본이 정설처럼 단정함
+- "의심": 틀렸거나, 숫자가 부풀려졌거나, 확인이 어려운 주장
+
+반드시 JSON만 반환하세요:
+{{
+  "claims": [
+    {{
+      "quote": "대본에서 그대로 복사한 해당 구절 (글자 하나도 바꾸지 말 것, 30자 이내 권장)",
+      "verdict": "확실 | 논란 | 의심",
+      "reason": "판정 이유 한두 문장. 논란·의심이면 정설이나 올바른 수치를 함께 적을 것",
+      "search_query": "사람이 직접 확인할 때 쓸 한국어 검색어"
+    }}
+  ]
+}}
+
+대본:
+{script.strip()}
+""".strip()
+
+
+def parse_fact_check(payload: dict, script: str) -> FactCheckResult:
+    from app.scripts.files import script_hash
+
+    claims = []
+    for item in payload.get("claims", []) if isinstance(payload, dict) else []:
+        try:
+            claims.append(FactCheckClaim.model_validate(item))
+        except ValidationError:
+            continue  # one malformed claim shouldn't discard the rest
+    order = {"의심": 0, "논란": 1, "확실": 2}
+    claims.sort(key=lambda c: order[c.verdict])
+    return FactCheckResult(script_hash=script_hash(script), claims=claims)
