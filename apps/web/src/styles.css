@@ -308,6 +308,7 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--ink-2); fo
 .file-btn { position: relative; overflow: hidden; margin-left: 8px; cursor: pointer; }
 .file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .rail-settings { margin-top: auto; }
+.rail-settings + .quota { margin-top: 0; } /* settings sits right on top of the usage meter */
 @media (max-width: 900px) {
   .key-row { grid-template-columns: 1fr; }
 }

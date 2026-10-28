@@ -61,8 +61,8 @@ export const TitleOverlay: React.FC<TitleOverlayProps> = ({ title }) => {
         inset: 0,
         display: "flex",
         justifyContent: "center",
-        alignItems: "center",
-        padding: "0 40px 200px 40px", // 중앙보다 조금 위
+        alignItems: "flex-start",
+        padding: "300px 40px 0 40px", // 상단 1/3: 유튜브 상단 아이콘(~200px) 아래, 화면 중앙의 인물·피사체는 가리지 않음
         pointerEvents: "none",
         zIndex: 60, // 자막(50)보다 위
       }}

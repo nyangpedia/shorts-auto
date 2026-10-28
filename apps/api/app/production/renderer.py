@@ -10,6 +10,7 @@ from pathlib import Path
 
 from app.core.paths import find_repo_root
 from app.core.settings import AppSettings
+from app.production.word_timing import assign_word_times, one_line_chunks, transcribe_words
 TTS_AUDIO_FILENAME = "output_1.2x.wav"
 RAW_STT_FILENAME = "raw_stt.json"
 SCENE_DATA_FILENAME = "scene_data.json"
@@ -365,13 +366,19 @@ def render_final_shorts(
         except Exception:
             raw_subtitles = []
 
-    # 긴 문장은 쇼츠 규격(1줄 8~15자 내외)에 맞춰 의미 단위 분할 및 시간 비례 배분
-    subtitles_list = split_subtitles_for_shorts(raw_subtitles, max_one_line=16, target_chunk_max=15)
-
     # 4. 나레이션 및 BGM 오디오 경로
     tts_audio_path = project_dir / TTS_AUDIO_FILENAME
     if not tts_audio_path.exists():
         raise FileNotFoundError(f"나레이션 오디오 파일이 없습니다: {tts_audio_path}")
+
+    # One-line subtitles timed word by word from the narration itself (the spoken word gets highlighted).
+    # Falls back to splitting segments by character count if word timing fails.
+    try:
+        spoken = transcribe_words(tts_audio_path, settings.whisper_model, settings.whisper_device)
+        subtitles_list = one_line_chunks(assign_word_times(raw_subtitles, spoken))
+    except Exception as exc:
+        print(f"[render] word timing unavailable, using segment split: {exc}")
+        subtitles_list = split_subtitles_for_shorts(raw_subtitles, max_one_line=12, target_chunk_max=12)
 
     repo_root = find_repo_root()
     bgm_path = repo_root / settings.bgm_path
