@@ -209,10 +209,12 @@ class YouTubeClient:
             base_params = {
                 "part": "snippet",
                 "type": "video",
-                "q": request.keyword,
                 "maxResults": 50,
                 "key": self.api_key,
             }
+            # Comma-separated keywords = one search each. YouTube matches results to the query's language,
+            # so foreign references need foreign-language keywords (each costs another 100 units).
+            keywords = [k.strip() for k in request.keyword.split(",") if k.strip()][:4]
             if request.duration_filter in ("under_60", "under_120", "under_180"):
                 # YouTube "short" = under 4 minutes; without it most hits are long videos we'd discard.
                 base_params["videoDuration"] = "short"
@@ -221,8 +223,9 @@ class YouTubeClient:
 
             video_ids: list[str] = []
             seen_video_ids: set[str] = set()
-            for published_after, published_before in date_windows(request):
-                params = dict(base_params)
+            searches = [(k, w) for k in keywords for w in date_windows(request)]
+            for keyword, (published_after, published_before) in searches:
+                params = dict(base_params, q=keyword)
                 if published_after:
                     params["publishedAfter"] = f"{published_after}T00:00:00Z"
                 if published_before:
@@ -240,7 +243,7 @@ class YouTubeClient:
                         seen_video_ids.add(video_id)
                         video_ids.append(video_id)
 
-            return self._hydrate(video_ids, "search", request)[: request.max_results]
+            return self._hydrate(video_ids, "search", request)[: request.max_results * len(keywords)]
 
         # 2. 키워드 없이 채널명만 있는 경우 (채널 uploads 재생목록에서 최신 영상들 긁어오기)
         if uploads_id:

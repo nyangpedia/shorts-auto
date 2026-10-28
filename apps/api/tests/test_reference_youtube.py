@@ -563,3 +563,17 @@ def test_channel_country_or_script_excludes_mislabelled_videos():
     assert is_readable_channel({})
     assert not is_readable_channel({"country": "IN", "description": "Money tips"})
     assert not is_readable_channel({"description": "డబ్బు చిట్కాలు"})
+
+
+def test_comma_separated_keywords_run_one_search_each():
+    queries = []
+
+    class Capture(httpx.BaseTransport):
+        def handle_request(self, request):
+            if request.url.path.endswith("/search"):
+                queries.append(request.url.params["q"])
+            return httpx.Response(200, json={"items": []})
+
+    client = YouTubeClient("key", http_client=httpx.Client(transport=Capture()))
+    client.search(ReferenceSearchRequest(keyword="실화 썰, true story ,実話,,a,b"))
+    assert queries == ["실화 썰", "true story", "実話", "a"]  # trimmed, empties dropped, capped at 4

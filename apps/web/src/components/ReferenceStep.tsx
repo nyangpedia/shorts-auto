@@ -18,17 +18,19 @@ const DURATIONS: readonly { value: DurationFilter; label: string; max: number }[
   { value: "all", label: "전체 길이", max: 600 }
 ];
 
+// Korean + English + Japanese per niche: YouTube returns results in the query's language,
+// so foreign references only show up for foreign-language keywords (100 quota units each).
 const GENRES = [
-  { label: "정보·상식", keyword: "알아두면 쓸모있는 상식" },
-  { label: "썰·이야기", keyword: "실화 썰" },
-  { label: "뉴스·시사", keyword: "오늘의 뉴스 이슈" },
-  { label: "명언·동기부여", keyword: "동기부여 명언" },
-  { label: "재테크", keyword: "돈 버는 습관" },
-  { label: "건강", keyword: "건강 습관 꿀팁" },
-  { label: "심리", keyword: "심리학 행동 특징" },
-  { label: "역사", keyword: "역사 이야기" },
-  { label: "과학", keyword: "신기한 과학" },
-  { label: "미스터리", keyword: "미스터리 괴담" }
+  { label: "정보·상식", keyword: "알아두면 쓸모있는 상식, fun facts, 雑学" },
+  { label: "썰·이야기", keyword: "실화 썰, true story, 実話" },
+  { label: "뉴스·시사", keyword: "오늘의 뉴스 이슈, news explained, ニュース 解説" },
+  { label: "명언·동기부여", keyword: "동기부여 명언, motivational quotes, 名言" },
+  { label: "재테크", keyword: "돈 버는 습관, money habits, お金 習慣" },
+  { label: "건강", keyword: "건강 습관 꿀팁, health tips, 健康 習慣" },
+  { label: "심리", keyword: "심리학 행동 특징, psychology facts, 心理学" },
+  { label: "역사", keyword: "역사 이야기, history facts, 歴史 雑学" },
+  { label: "과학", keyword: "신기한 과학, science facts, 科学 雑学" },
+  { label: "미스터리", keyword: "미스터리 괴담, unsolved mystery, 都市伝説" }
 ] as const;
 
 const fmt = (value: number | null) => (value === null ? "-" : new Intl.NumberFormat("ko-KR", { notation: "compact" }).format(value));
@@ -77,7 +79,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
 
       <form className="card" onSubmit={search}>
         <div className="search-row">
-          <input aria-label="검색어" className="input" onChange={(e) => setKeyword(e.target.value)} placeholder="예: 돈 버는 습관" value={keyword} />
+          <input aria-label="검색어" className="input" onChange={(e) => setKeyword(e.target.value)} placeholder="예: 돈 버는 습관, money habits, お金 習慣 (쉼표로 여러 언어)" value={keyword} />
           <select aria-label="영상 길이" className="select" onChange={(e) => setDuration(e.target.value as DurationFilter)} value={duration}>
             {DURATIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
@@ -97,6 +99,9 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
             </button>
           ))}
         </div>
+        <p className="muted small" style={{ margin: "10px 0 0" }}>
+          해외 쇼츠는 그 나라 말 키워드로만 나옵니다. 쉼표로 나눈 키워드마다 검색하며, 키워드 1개당 YouTube 무료 한도 100포인트(하루 10,000)를 씁니다.
+        </p>
         <details className="more">
           <summary>상세 조건 (채널, 기간, 조회수)</summary>
           <div className="search-extra">
