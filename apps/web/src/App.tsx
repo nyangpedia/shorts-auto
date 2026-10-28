@@ -668,7 +668,10 @@ export default function App() {
               )}
               {viewStep === 5 && (
                 <ScenesStep
+                  busyText={busyFor("production")}
                   isBusy={busy !== null}
+                  onChangeStyle={(style) => void handleBuildScenes(style)}
+                  styleId={production?.concept_kit?.style_id ?? null}
                   onGenerateAllImages={(model) => sceneTask((id) => generateAllSceneImages(id, model))}
                   onGenerateImage={(sceneId, model) => sceneTask((id) => generateSceneImage(id, sceneId, model))}
                   onGenerateVideo={(sceneId, model) => sceneTask((id) => generateSceneVideo(id, sceneId, model, 5, false, false))}

@@ -113,14 +113,43 @@ describe("ScenesStep", () => {
         onGenerateImage={vi.fn()}
         onGenerateVideo={onGenerateVideo}
         onRegenerate={vi.fn()}
+        onChangeStyle={vi.fn()}
         onUpdatePrompts={vi.fn()}
         scenes={[scene(1, true, true), scene(2, true, false), scene(3, false, false)]}
+        styleId="claymation"
       />
     );
 
     await user.click(screen.getByRole("button", { name: "남은 영상 1개 만들기" }));
     await waitFor(() => expect(onGenerateVideo).toHaveBeenCalledTimes(1));
     expect(onGenerateVideo).toHaveBeenCalledWith(2, "kenburns");
+  });
+
+  it("shows the applied style and re-plans scenes only after confirming a change", async () => {
+    const user = userEvent.setup();
+    const onChangeStyle = vi.fn();
+    const confirm = vi.spyOn(window, "confirm").mockReturnValueOnce(false).mockReturnValueOnce(true);
+    render(
+      <ScenesStep
+        isBusy={false}
+        onChangeStyle={onChangeStyle}
+        onGenerateAllImages={vi.fn()}
+        onGenerateImage={vi.fn()}
+        onGenerateVideo={vi.fn()}
+        onRegenerate={vi.fn()}
+        onUpdatePrompts={vi.fn()}
+        scenes={[scene(1, true, false)]}
+        styleId="claymation"
+      />
+    );
+    const picker = screen.getByRole("combobox", { name: "화풍" });
+    expect(picker).toHaveValue("claymation");
+
+    await user.selectOptions(picker, "cinematic");
+    expect(onChangeStyle).not.toHaveBeenCalled(); // declined
+    await user.selectOptions(picker, "cinematic");
+    expect(onChangeStyle).toHaveBeenCalledWith("cinematic");
+    expect(confirm.mock.calls[0][0]).toContain("이미지 1장");
   });
 });
 

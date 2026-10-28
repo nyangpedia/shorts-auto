@@ -1,11 +1,15 @@
 import { useEffect, useState } from "react";
 
-import { IMAGE_MODELS, VIDEO_MODELS, modelLabel } from "../models";
+import { IMAGE_MODELS, VIDEO_MODELS, VISUAL_STYLES, modelLabel } from "../models";
 import type { VideoSceneItem } from "../types";
 
 interface ScenesStepProps {
   readonly scenes: readonly VideoSceneItem[];
   readonly isBusy: boolean;
+  readonly busyText?: string | null;
+  /** Style the current scenes were planned in; changing it re-plans the scenes (and clears their pictures). */
+  readonly styleId: string | null;
+  readonly onChangeStyle: (styleId: string) => void;
   readonly onGenerateImage: (sceneId: number, model: string) => Promise<void>;
   readonly onGenerateAllImages: (model: string) => Promise<void>;
   readonly onGenerateVideo: (sceneId: number, model: string) => Promise<void>;
@@ -39,6 +43,13 @@ export function ScenesStep(props: ScenesStepProps) {
   const withImage = scenes.filter((s) => s.start_image_url).length;
   const withVideo = scenes.filter((s) => s.generated_video_url).length;
   const busy = isBusy || batch !== null;
+
+  function changeStyle(next: string) {
+    if (next === props.styleId) return;
+    const label = VISUAL_STYLES.find((s) => s.id === next)?.label ?? next;
+    const lost = withImage ? ` 지금 이미지 ${withImage}장과 영상은 지워집니다.` : "";
+    if (window.confirm(`'${label}' 화풍으로 씬 구성을 다시 만들까요?${lost} (대본 AI 1회 사용)`)) props.onChangeStyle(next);
+  }
   const media = (url: string | null) => (url ? `${url}${url.includes("?") ? "&" : "?"}v=${version}` : undefined);
 
   async function run(sceneId: number, task: () => Promise<void>) {
@@ -75,6 +86,12 @@ export function ScenesStep(props: ScenesStepProps) {
   return (
     <div>
       <div className="toolbar">
+        <label className="field">화풍
+          <select className="select" disabled={busy} onChange={(e) => changeStyle(e.target.value)} value={props.styleId ?? ""}>
+            {props.styleId ? null : <option value="">선택 안 됨</option>}
+            {VISUAL_STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+          </select>
+        </label>
         <label className="field">이미지
           <select className="select" onChange={(e) => setImageModel(e.target.value)} value={imageModel}>
             {IMAGE_MODELS.map((m) => <option key={m.id} value={m.id}>{modelLabel(m)}</option>)}
@@ -93,7 +110,7 @@ export function ScenesStep(props: ScenesStepProps) {
           남은 영상 {Math.max(0, withImage - withVideo)}개 만들기
         </button>
       </div>
-      {batch ? <div className="banner busy">⏳ {batch}</div> : null}
+      {batch || props.busyText ? <div className="banner busy">⏳ {batch ?? props.busyText}</div> : null}
       {!IMAGE_MODELS.find((m) => m.id === imageModel)?.free || !VIDEO_MODELS.find((m) => m.id === videoModel)?.free ? (
         <div className="banner warn">유료 모델을 골랐습니다. Higgsfield/OpenAI 계정과 크레딧이 필요하고 비용이 발생합니다.</div>
       ) : null}
