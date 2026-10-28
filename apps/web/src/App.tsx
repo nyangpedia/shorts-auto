@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   addDirectReference,
@@ -81,8 +81,10 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [usageToday, setUsageToday] = useState<UsageToday | null>(null);
+  // Read the opening URL once; it is cleared after load so a refresh lands on home.
+  const linkParams = useRef(new URLSearchParams(window.location.search)).current;
   const [view, setView] = useState<"home" | "project" | "topics" | "daily">(() => {
-    const params = new URLSearchParams(window.location.search);
+    const params = linkParams;
     const asked = params.get("view");
     if (asked === "topics" || asked === "daily") return asked;
     return params.get("project") ? "project" : "home";
@@ -108,8 +110,10 @@ export default function App() {
     fetchProjects()
       .then((loaded) => {
         setProjects(loaded);
-        const wanted = new URLSearchParams(window.location.search).get("project");
+        const wanted = linkParams.get("project");
         setProject((current) => current ?? loaded.find((p) => p.project_id === wanted) ?? loaded[0] ?? null);
+        // Deep links are one-shot: a refresh should land on the home screen, not reopen the linked project.
+        if (window.location.search) window.history.replaceState(null, "", window.location.pathname);
       })
       .catch((reason) => setError(errorText(reason, "프로젝트를 불러오지 못했습니다. 백엔드 서버가 켜져 있는지 확인하세요.")))
       .finally(() => setIsLoading(false));
@@ -130,7 +134,7 @@ export default function App() {
         setScripts(scr);
         setProduction(prod);
         const reachable = reachedStep(ref, scr, prod);
-        const asked = Number(new URLSearchParams(window.location.search).get("step"));
+        const asked = linkParams.get("project") === projectId ? Number(linkParams.get("step")) : 0;
         setViewStep((asked >= 1 && asked <= reachable ? asked : reachable) as StepNumber);
         setError(null);
       })
