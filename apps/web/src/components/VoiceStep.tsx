@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 
 import { VISUAL_STYLES } from "../models";
+import { StylePicker } from "./StylePicker";
 import type { ConceptKit } from "../types";
 
 interface VoiceStepProps {
@@ -47,11 +48,7 @@ export function VoiceStep({ audioUrl, durationSeconds, conceptKit, sceneCount, i
 
         <div className="card">
           <div className="section-head"><h2>화풍</h2><p>모든 씬에 같은 화풍과 주인공이 적용됩니다</p></div>
-          <div className="chips">
-            {VISUAL_STYLES.map((s) => (
-              <button aria-pressed={style === s.id} key={s.id} onClick={() => setStyle(s.id)} type="button">{s.label}</button>
-            ))}
-          </div>
+          <StylePicker onPick={setStyle} value={style} />
           {conceptKit ? (
             <p className="muted small" style={{ marginTop: 12 }}>
               지금 적용된 화풍: <b>{VISUAL_STYLES.find((s) => s.id === conceptKit.style_id)?.label ?? conceptKit.style_id}</b> · 씬 {sceneCount}개

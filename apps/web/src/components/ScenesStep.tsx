@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 
 import { IMAGE_MODELS, VIDEO_MODELS, VISUAL_STYLES, modelLabel } from "../models";
 import type { VideoSceneItem } from "../types";
+import { StylePicker } from "./StylePicker";
 
 interface ScenesStepProps {
   readonly scenes: readonly VideoSceneItem[];
@@ -28,6 +29,7 @@ export function ScenesStep(props: ScenesStepProps) {
   const [imagePrompt, setImagePrompt] = useState("");
   const [videoPrompt, setVideoPrompt] = useState("");
   const [version, setVersion] = useState(0);
+  const [pickingStyle, setPickingStyle] = useState(false);
 
   const selected = scenes.find((s) => s.scene_id === selectedId) ?? scenes[0] ?? null;
   useEffect(() => {
@@ -48,7 +50,10 @@ export function ScenesStep(props: ScenesStepProps) {
     if (next === props.styleId) return;
     const label = VISUAL_STYLES.find((s) => s.id === next)?.label ?? next;
     const lost = withImage ? ` 지금 이미지 ${withImage}장과 영상은 지워집니다.` : "";
-    if (window.confirm(`'${label}' 화풍으로 씬 구성을 다시 만들까요?${lost} (대본 AI 1회 사용)`)) props.onChangeStyle(next);
+    if (window.confirm(`'${label}' 화풍으로 씬 구성을 다시 만들까요?${lost} (대본 AI 1회 사용)`)) {
+      setPickingStyle(false);
+      props.onChangeStyle(next);
+    }
   }
   const media = (url: string | null) => (url ? `${url}${url.includes("?") ? "&" : "?"}v=${version}` : undefined);
 
@@ -86,12 +91,12 @@ export function ScenesStep(props: ScenesStepProps) {
   return (
     <div>
       <div className="toolbar">
-        <label className="field">화풍
-          <select className="select" disabled={busy} onChange={(e) => changeStyle(e.target.value)} value={props.styleId ?? ""}>
-            {props.styleId ? null : <option value="">선택 안 됨</option>}
-            {VISUAL_STYLES.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
-          </select>
-        </label>
+        <div className="field">화풍
+          <button aria-expanded={pickingStyle} className="select style-current" disabled={busy} onClick={() => setPickingStyle(!pickingStyle)} type="button">
+            {props.styleId ? <img alt="" onError={(e) => e.currentTarget.remove()} src={`/styles/${props.styleId}.jpg`} /> : null}
+            {VISUAL_STYLES.find((s) => s.id === props.styleId)?.label ?? "선택 안 됨"} ▾
+          </button>
+        </div>
         <label className="field">이미지
           <select className="select" onChange={(e) => setImageModel(e.target.value)} value={imageModel}>
             {IMAGE_MODELS.map((m) => <option key={m.id} value={m.id}>{modelLabel(m)}</option>)}
@@ -110,6 +115,12 @@ export function ScenesStep(props: ScenesStepProps) {
           남은 영상 {Math.max(0, withImage - withVideo)}개 만들기
         </button>
       </div>
+      {pickingStyle ? (
+        <div className="card style-panel">
+          <p className="muted small" style={{ margin: "0 0 10px" }}>화풍을 바꾸면 씬 구성을 다시 만듭니다. 그림은 같은 장면을 화풍별로 그린 예시입니다.</p>
+          <StylePicker disabled={busy} onPick={changeStyle} value={props.styleId} />
+        </div>
+      ) : null}
       {batch || props.busyText ? <div className="banner busy">⏳ {batch ?? props.busyText}</div> : null}
       {!IMAGE_MODELS.find((m) => m.id === imageModel)?.free || !VIDEO_MODELS.find((m) => m.id === videoModel)?.free ? (
         <div className="banner warn">유료 모델을 골랐습니다. Higgsfield/OpenAI 계정과 크레딧이 필요하고 비용이 발생합니다.</div>

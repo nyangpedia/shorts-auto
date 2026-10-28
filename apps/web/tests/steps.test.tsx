@@ -142,12 +142,12 @@ describe("ScenesStep", () => {
         styleId="claymation"
       />
     );
-    const picker = screen.getByRole("combobox", { name: "화풍" });
-    expect(picker).toHaveValue("claymation");
+    await user.click(screen.getByRole("button", { name: /3D 클레이/ })); // shows the applied style; opens the cards
+    expect(screen.getByRole("radio", { name: /3D 클레이/ })).toHaveAttribute("aria-checked", "true");
 
-    await user.selectOptions(picker, "cinematic");
+    await user.click(screen.getByRole("radio", { name: /시네마틱 실사/ }));
     expect(onChangeStyle).not.toHaveBeenCalled(); // declined
-    await user.selectOptions(picker, "cinematic");
+    await user.click(screen.getByRole("radio", { name: /시네마틱 실사/ }));
     expect(onChangeStyle).toHaveBeenCalledWith("cinematic");
     expect(confirm.mock.calls[0][0]).toContain("이미지 1장");
   });
