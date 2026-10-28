@@ -56,6 +56,32 @@ export function updateProject(projectId: string, payload: UpdateProjectPayload):
   }).then((data) => data.project);
 }
 
+export interface YouTubeStatus {
+  readonly configured: boolean;
+  readonly connected: boolean;
+}
+
+export interface YouTubeUploadResult {
+  readonly video_id: string;
+  readonly url: string;
+  readonly studio_url: string;
+}
+
+export function fetchYouTubeStatus(): Promise<YouTubeStatus> {
+  return request("/api/youtube/status");
+}
+
+export function fetchYouTubeAuthUrl(): Promise<{ auth_url: string }> {
+  return request("/api/youtube/connect");
+}
+
+export function uploadToYouTube(
+  projectId: string,
+  payload: { title: string; description: string; tags: string }
+): Promise<YouTubeUploadResult> {
+  return request(`/api/projects/${encodeURIComponent(projectId)}/youtube/upload`, { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function deleteProject(projectId: string): Promise<unknown> {
   return request(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
 }

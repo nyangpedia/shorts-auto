@@ -18,6 +18,7 @@ from app.references.youtube import YouTubeClient
 from app.scripts.router import create_scripts_router
 from app.topics.router import create_topics_router
 from app.daily.router import create_daily_router
+from app.uploads.router import create_uploads_router
 
 
 def create_app(
@@ -26,6 +27,7 @@ def create_app(
     audio_extractor=extract_reference_audio,
     transcription_client_factory=None,
     analysis_client_factory=OpenAIAnalysisClient,
+    upload_transport=None,
 ) -> FastAPI:
     root = repo_root or find_repo_root()
     settings = load_settings(root)
@@ -107,6 +109,7 @@ def create_app(
     app.include_router(create_production_router(outputs_dir_provider, settings_provider))
     app.include_router(create_topics_router(outputs_dir_provider))
     app.include_router(create_daily_router(outputs_dir_provider, settings_provider, youtube_client_factory))
+    app.include_router(create_uploads_router(root, outputs_dir_provider, upload_transport))
     return app
 
 

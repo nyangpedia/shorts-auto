@@ -1,5 +1,7 @@
 .DS_Store
 .env
+client_secret*.json
+.youtube_token.json
 .env.*
 !.env.example
 .venv/

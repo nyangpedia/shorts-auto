@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 
+import { fetchYouTubeAuthUrl, fetchYouTubeStatus, uploadToYouTube, type YouTubeStatus, type YouTubeUploadResult } from "../api";
 import type { ScriptCandidate } from "../types";
 
 interface FinalStepProps {
@@ -34,6 +35,37 @@ export function FinalStep({ projectId, finalVideoUrl, candidate, videoTitle, sce
   const [checks, setChecks] = useState<boolean[]>(() => readChecks(projectId));
   const [title, setTitle] = useState(videoTitle);
   const [videoVersion, setVideoVersion] = useState(0);
+  const [yt, setYt] = useState<YouTubeStatus | null>(null);
+  const [description, setDescription] = useState(candidate?.description ?? "");
+  const [tags, setTags] = useState(candidate?.tags ?? "");
+  const [uploading, setUploading] = useState(false);
+  const [uploaded, setUploaded] = useState<YouTubeUploadResult | null>(null);
+  const [ytError, setYtError] = useState<string | null>(null);
+
+  const loadYt = () => void Promise.resolve(fetchYouTubeStatus()).then((s) => setYt(s ?? null)).catch(() => setYt(null));
+  useEffect(loadYt, []);
+  useEffect(() => { setDescription(candidate?.description ?? ""); setTags(candidate?.tags ?? ""); setUploaded(null); }, [projectId, candidate]);
+
+  async function connectYt() {
+    try {
+      window.open((await fetchYouTubeAuthUrl()).auth_url, "_blank");
+      setYtError(null);
+    } catch (reason) {
+      setYtError(reason instanceof Error ? reason.message : "연결하지 못했습니다.");
+    }
+  }
+
+  async function upload() {
+    setUploading(true);
+    setYtError(null);
+    try {
+      setUploaded(await uploadToYouTube(projectId, { title: title || videoTitle, description, tags }));
+    } catch (reason) {
+      setYtError(reason instanceof Error ? reason.message : "업로드에 실패했습니다.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   useEffect(() => setChecks(readChecks(projectId)), [projectId]);
   useEffect(() => setTitle(videoTitle), [videoTitle]);
@@ -93,6 +125,34 @@ export function FinalStep({ projectId, finalVideoUrl, candidate, videoTitle, sce
             ))}
           </ul>
         </div>
+
+        {finalVideoUrl && yt?.configured ? (
+          <div className="card">
+            <div className="section-head"><h2>유튜브에 올리기</h2><p>항상 비공개로 올라갑니다. 스튜디오에서 확인 후 공개하세요.</p></div>
+            {ytError ? <div className="banner bad" role="alert">⚠️ {ytError}</div> : null}
+            {!yt.connected ? (
+              <div className="row">
+                <button className="btn" onClick={() => void connectYt()} type="button">구글 계정 연결</button>
+                <button className="btn" onClick={loadYt} type="button">연결 확인</button>
+              </div>
+            ) : uploaded ? (
+              <div className="row">
+                <span className="chip ok">업로드 완료 (비공개)</span>
+                <a className="btn" href={uploaded.studio_url} rel="noreferrer" target="_blank">스튜디오에서 열기 ↗</a>
+              </div>
+            ) : (
+              <>
+                <label className="field">설명<textarea className="input" onChange={(e) => setDescription(e.target.value)} rows={3} value={description} /></label>
+                <label className="field">태그<input className="input" onChange={(e) => setTags(e.target.value)} value={tags} /></label>
+                <div className="row">
+                  <button className="btn accent" disabled={uploading || !(title || videoTitle) || checks.filter(Boolean).length < CHECKS.length} onClick={() => void upload()} title="업로드 전 확인 4개를 모두 체크해야 합니다" type="button">
+                    {uploading ? "올리는 중…" : "비공개로 업로드"}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        ) : null}
 
         {metas.length > 0 && (
           <div className="card">
