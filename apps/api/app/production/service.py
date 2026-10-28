@@ -457,6 +457,38 @@ def split_script_into_meaningful_scenes(text: str, max_len: int = 40) -> list[st
     return refined
 
 
+SCENE_BEAT_CHARS = 20  # ~2.5 s of 1.2x narration: Shorts that hold attention cut every 2-3 s
+MIN_BEAT_CHARS = 8
+
+
+def split_into_beats(parts: list[str], beat: int = SCENE_BEAT_CHARS) -> list[str]:
+    """Cut clauses into ~2.5 s beats on word boundaries, folding stubs like "첫째," into the next beat."""
+    beats: list[str] = []
+    for part in parts:
+        words = part.split()
+        count = max(1, round(len(part) / beat))
+        target = len(part) / count
+        current = ""
+        for word in words:
+            joined = f"{current} {word}".strip()
+            if current and len(joined) > target * 1.15 and not re.search(r"[\d만억조]$", current):
+                beats.append(current)
+                current = word
+            else:
+                current = joined
+        if current:
+            beats.append(current)
+    merged: list[str] = []
+    for b in beats:
+        if merged and len(merged[-1]) < MIN_BEAT_CHARS:
+            merged[-1] = f"{merged[-1]} {b}"
+        else:
+            merged.append(b)
+    if len(merged) > 1 and len(merged[-1]) < MIN_BEAT_CHARS:
+        merged[-2] = f"{merged[-2]} {merged.pop()}"
+    return merged
+
+
 def calibrate_scenes_with_stt(
     video_scenes: list[VideoSceneItem],
     stt_segments: list[dict],
@@ -567,7 +599,7 @@ def generate_concept_kit_and_video_scenes(
     stt_context = json.dumps(stt_segments, ensure_ascii=False) if stt_segments else "[]"
 
     # 대본 문장 및 의미 있는 절(Clause) 분할 및 번호 매기기 (쇼츠 씬 템포에 맞춰 너무 긴 문장은 의미 단위로 자동 분할)
-    sentences = split_script_into_meaningful_scenes(script_text, max_len=40)
+    sentences = split_into_beats(split_script_into_meaningful_scenes(script_text, max_len=40))
     sentence_count = len(sentences)
     numbered_sentences = "\n".join([f"{i+1}. {s}" for i, s in enumerate(sentences)])
 
@@ -586,7 +618,7 @@ def generate_concept_kit_and_video_scenes(
 ======================================================================
 - **1. 분할된 의미 단위 1개당 1개의 씬 (정확히 {sentence_count}개 씬 생성 - 엄수!)**:
   * 아래 [대본 완결 문장/의미 단위 목록]의 1번부터 {sentence_count}번까지의 각 구절이 정확히 Scene 1부터 Scene {sentence_count}에 1:1로 대응되어야 합니다.
-  * 절대로 2개 이상의 구절을 하나의 씬으로 묶거나 합치지 마세요! (쇼츠 영상 템포와 3~5초 비디오 AI 규격을 위해 1구절당 1씬 원칙 엄수)
+  * 절대로 2개 이상의 구절을 하나의 씬으로 묶거나 합치지 마세요! (2~3초마다 화면이 바뀌는 쇼츠 템포를 위해 1구절당 1씬 원칙 엄수)
   * 각 씬의 `narration`은 반드시 아래 목록의 해당 번호 구절 그대로 100% 동일하게 입력해야 합니다 (절대 영어 번역 금지, 요약 금지).
     - Scene 1의 `narration`: 1번 구절
     - Scene 2의 `narration`: 2번 구절
