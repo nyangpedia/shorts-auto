@@ -886,7 +886,8 @@ def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path)
             f"https://api.cloudflare.com/client/v4/accounts/{settings.cloudflare_account_id}"
             "/ai/run/@cf/black-forest-labs/flux-1-schnell",
             headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
-            json={"prompt": prompt[:2000], "steps": 4},
+            # Output is square and gets center-cropped to 9:16, so keep the subject in the middle third.
+            json={"prompt": f"{prompt[:1850]}, subject centered in frame, vertical composition, nothing important near left or right edges", "steps": 4},
             timeout=120.0,
         )
         if resp.status_code not in (400, 429, 500, 502, 503, 504) or attempt == 2:

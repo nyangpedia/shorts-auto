@@ -258,6 +258,13 @@ def render_final_shorts(
         norm_clip_path = tmp_dir / f"norm_scene_{scene_id:02d}.mp4"
         clip_durations.append(target_dur)
 
+        if not (video_path.exists() and video_path.stat().st_size > 1000) and start_img_path.exists():
+            # No scene video made: give the still a Ken Burns move instead of a frozen frame.
+            from app.production.service import _make_kenburns_video
+
+            video_path = tmp_dir / f"kenburns_{scene_id:02d}.mp4"
+            _make_kenburns_video(scene_id, start_img_path, video_path, math.ceil(target_dur))
+
         if video_path.exists() and video_path.stat().st_size > 1000:
             # 실제 생성된 비디오가 있는 경우 -> 모션 드득거림 방지를 위해 1.0x 원본 속도 100% 유지
             actual_dur = _get_video_duration(video_path)
@@ -270,8 +277,7 @@ def render_final_shorts(
             pts_factor = target_dur / actual_dur
             filter_vf = (
                 f"setpts={pts_factor:.6f}*PTS,"
-                "scale=1080:1920:force_original_aspect_ratio=decrease,"
-                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,"
+                "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
                 "setsar=1,fps=24"
             )
 
@@ -288,8 +294,7 @@ def render_final_shorts(
         elif start_img_path.exists():
             # 비디오가 아직 없는 경우 -> 시작 이미지를 target_duration 동안 24 FPS 정지영상 클립으로 생성
             filter_vf = (
-                "scale=1080:1920:force_original_aspect_ratio=decrease,"
-                "pad=1080:1920:(ow-iw)/2:(oh-ih)/2:color=black,"
+                "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,"
                 "setsar=1,fps=24"
             )
             cmd = [
