@@ -351,6 +351,10 @@ export default function App() {
     production?.has_final_video ? "렌더링 완료 · 업로드 전 확인을 체크하세요" : "렌더링하세요"
   ][viewStep - 1];
 
+  // Rendered projects move into a collapsed box so the rail only lists work in progress.
+  const doneProjects = projects.filter((p) => p.generated_files.final_video);
+  const activeProjects = projects.filter((p) => !p.generated_files.final_video);
+
   return (
     <div className="app">
       <aside className="rail" aria-label="프로젝트">
@@ -368,7 +372,7 @@ export default function App() {
         <div className="rail-label">프로젝트</div>
         <div className="proj-list">
           {projects.length === 0 && !isLoading ? <p className="rail-empty">아직 프로젝트가 없습니다.</p> : null}
-          {projects.map((item) => (
+          {activeProjects.map((item) => (
             <button
               aria-current={view === "project" && item.project_id === projectId ? "page" : undefined}
               className="proj"
@@ -388,6 +392,31 @@ export default function App() {
               </span>
             </button>
           ))}
+          {doneProjects.length > 0 ? (
+            <details className="done-box">
+              <summary>완료함 ({doneProjects.length})</summary>
+              {doneProjects.map((item) => (
+            <button
+                  aria-current={view === "project" && item.project_id === projectId ? "page" : undefined}
+                  className="proj"
+                  key={item.project_id}
+                  onClick={() => handleSelectProject(item)}
+                  type="button"
+                >
+                  <img
+                    alt=""
+                    className="proj-thumb"
+                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
+                    src={`/api/projects/${encodeURIComponent(item.project_id)}/production/scenes/scene_01_start.png`}
+                  />
+                  <span>
+                    <b>{item.project_title === "untitled" ? item.display_name : item.project_title}</b>
+                    <small>{STEP_KO[item.current_step] ?? item.current_step}</small>
+                  </span>
+                </button>
+              ))}
+            </details>
+          ) : null}
         </div>
         {usageToday ? <UsageMeter usage={usageToday} /> : null}
       </aside>

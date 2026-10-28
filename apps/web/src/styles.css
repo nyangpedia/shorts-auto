@@ -49,6 +49,9 @@ img { display: block; max-width: 100%; }
 .new-project { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 11px; font-weight: 700; }
 .rail-label { margin: 8px 6px 0; font-size: 11px; color: #8d8d97; font-weight: 700; letter-spacing: 0.06em; }
 .proj-list { display: grid; gap: 4px; }
+.done-box { margin-top: 8px; }
+.done-box > summary { cursor: pointer; padding: 6px; font-size: 11px; color: #8d8d97; font-weight: 700; letter-spacing: 0.06em; }
+.done-box[open] { display: grid; gap: 4px; }
 .proj { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 10px; color: inherit; background: none; border: 0; text-align: left; }
 .proj:hover { background: var(--rail-2); }
 .proj[aria-current="page"] { background: var(--rail-2); box-shadow: inset 0 0 0 1px var(--rail-line); }
