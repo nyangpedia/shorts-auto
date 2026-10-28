@@ -72,6 +72,8 @@ const STEP_KO: Record<StepName, string> = {
 
 const STEP_ICON: Record<string, string> = { 레퍼런스: "🔍", 분석: "🧪", 대본: "✍️", 제작: "🎨", 완성: "✅" };
 
+const GLOBAL = "_global";
+
 const errorText = (reason: unknown, fallback: string) => (reason instanceof Error ? reason.message : fallback);
 
 export default function App() {
@@ -81,7 +83,16 @@ export default function App() {
   const [scripts, setScripts] = useState<ScriptsState | null>(null);
   const [production, setProduction] = useState<ProductionState | null>(null);
   const [viewStep, setViewStep] = useState<StepNumber>(1);
-  const [busy, setBusy] = useState<{ area: Area; text: string } | null>(null);
+  // One lock per project (plus GLOBAL for work that isn't inside a project yet), so rendering one
+  // project doesn't freeze another.
+  const [busyMap, setBusyMap] = useState<Readonly<Record<string, { area: Area; text: string }>>>({});
+  const setBusyFor = (key: string, value: { area: Area; text: string } | null) =>
+    setBusyMap((m) => {
+      const next = { ...m };
+      if (value) next[key] = value;
+      else delete next[key];
+      return next;
+    });
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
@@ -117,6 +128,11 @@ export default function App() {
 
   const projectId = project?.project_id ?? null;
   const reached = reachedStep(reference, scripts, production);
+  // Results of a long task land only if its project is still on screen (the user may have moved on).
+  const currentIdRef = useRef(projectId);
+  currentIdRef.current = projectId;
+  const onScreen = (id: string) => currentIdRef.current === id;
+  const busy = (view === "project" && projectId ? busyMap[projectId] : undefined) ?? busyMap[GLOBAL] ?? null;
 
   useEffect(() => {
     fetchProjects()
@@ -157,31 +173,37 @@ export default function App() {
   }, [projectId]);
 
   function storeProject(updated: Project) {
-    setProject(updated);
+    setProject((current) => (current?.project_id === updated.project_id ? updated : current));
     setProjects((list) => list.map((item) => (item.project_id === updated.project_id ? updated : item)));
   }
 
-  /** Runs one long action with a single busy lock, then refreshes the project record. */
+  /**
+   * Runs one long action under this project's lock, then refreshes the project record.
+   * Returns true only if it succeeded and the project is still the one on screen.
+   */
   async function run(area: Area, text: string, action: (id: string) => Promise<void>): Promise<boolean> {
-    if (!projectId || busy) return false;
-    setBusy({ area, text });
+    const id = projectId;
+    if (!id || busyMap[id]) return false;
+    setBusyFor(id, { area, text });
     try {
-      await action(projectId);
-      storeProject(await getProject(projectId));
-      setError(null);
-      return true;
+      await action(id);
+      storeProject(await getProject(id));
+      if (onScreen(id)) setError(null);
+      return onScreen(id);
     } catch (reason) {
       setError(errorText(reason, "작업에 실패했습니다."));
       return false;
     } finally {
-      setBusy(null);
+      setBusyFor(id, null);
       refreshUsage();
     }
   }
 
-  const loadReference = async (id: string) => setReference(await fetchReferenceState(id));
-  const loadScripts = async (id: string) => setScripts(await fetchScriptsState(id));
-  const loadProduction = async (id: string) => setProduction(await fetchProductionState(id));
+  const loadReference = async (id: string) => { const r = await fetchReferenceState(id); if (onScreen(id)) setReference(r); };
+  const loadScripts = async (id: string) => { const r = await fetchScriptsState(id); if (onScreen(id)) setScripts(r); };
+  const loadProduction = async (id: string) => { const r = await fetchProductionState(id); if (onScreen(id)) setProduction(r); };
+  const showScripts = (id: string, value: ScriptsState) => { if (onScreen(id)) setScripts(value); };
+  const showProduction = (id: string, value: ProductionState) => { if (onScreen(id)) setProduction(value); };
 
   // ── project ──
   // "새 프로젝트" opens the finder; the project itself is created only when a video is picked,
@@ -189,15 +211,15 @@ export default function App() {
   const startNewProject = () => setView("find");
 
   async function handleFindSearch(payload: ReferenceSearchPayload) {
-    if (busy) return;
-    setBusy({ area: "reference", text: "쇼츠 검색 중… (처음 검색은 1분 정도)" });
+    if (busyMap[GLOBAL]) return;
+    setBusyFor(GLOBAL, { area: "reference", text: "쇼츠 검색 중… (처음 검색은 1분 정도)" });
     try {
       setFindCandidates((await searchReferencesWithoutProject(payload)).candidates);
       setError(null);
     } catch (reason) {
       setError(errorText(reason, "검색하지 못했습니다."));
     } finally {
-      setBusy(null);
+      setBusyFor(GLOBAL, null);
       refreshUsage();
     }
   }
@@ -212,7 +234,7 @@ export default function App() {
   }
 
   async function handleDelete() {
-    if (!project || busy) return;
+    if (!project || busyMap[project.project_id]) return;
     if (!window.confirm(`"${project.display_name}" 프로젝트를 삭제할까요? 영상·이미지·대본 파일이 모두 지워지고 되돌릴 수 없습니다.`)) return;
     try {
       await deleteProject(project.project_id);
@@ -238,8 +260,8 @@ export default function App() {
 
   /** Long actions that start from the topics/daily views (no project selected yet). */
   async function runGlobal(text: string, action: () => Promise<Project>) {
-    if (busy) return;
-    setBusy({ area: "reference", text });
+    if (busyMap[GLOBAL]) return;
+    setBusyFor(GLOBAL, { area: "reference", text });
     try {
       const created = await action();
       setProjects((list) => [created, ...list.filter((p) => p.project_id !== created.project_id)]);
@@ -248,7 +270,7 @@ export default function App() {
     } catch (reason) {
       setError(errorText(reason, "작업에 실패했습니다."));
     } finally {
-      setBusy(null);
+      setBusyFor(GLOBAL, null);
       refreshUsage();
       loadTopics();
     }
@@ -288,15 +310,15 @@ export default function App() {
     );
 
   async function handleDaily(action: () => Promise<DailyState>, text: string) {
-    if (busy) return;
-    setBusy({ area: "reference", text });
+    if (busyMap[GLOBAL]) return;
+    setBusyFor(GLOBAL, { area: "reference", text });
     try {
       setDaily(await action());
       setError(null);
     } catch (reason) {
       setError(errorText(reason, "오늘의 레퍼런스 작업에 실패했습니다."));
     } finally {
-      setBusy(null);
+      setBusyFor(GLOBAL, null);
     }
   }
 
@@ -337,10 +359,10 @@ export default function App() {
     const ok = await run("analysis", needsAudio ? "음원 내려받는 중…" : "분석 준비 중…", async (id) => {
       if (needsAudio) await extractReferenceAudio(id);
       if (needsStt) {
-        setBusy({ area: "analysis", text: "자막으로 변환 중… (로컬 Whisper)" });
+        setBusyFor(id, { area: "analysis", text: "자막으로 변환 중… (로컬 Whisper)" });
         await runReferenceStt(id);
       }
-      setBusy({ area: "analysis", text: "성공 공식 분석 중… (Gemini, 30초 정도)" });
+      setBusyFor(id, { area: "analysis", text: "성공 공식 분석 중… (Gemini, 30초 정도)" });
       await runReferenceAnalysis(id);
       await loadReference(id);
     });
@@ -367,35 +389,36 @@ export default function App() {
       await Promise.all([loadScripts(id), loadProduction(id)]);
     });
   const handleSaveScript = (text: string) =>
-    void run("script", "저장 중…", async (id) => setScripts(await updateFinalScript(id, text)));
+    void run("script", "저장 중…", async (id) => showScripts(id, await updateFinalScript(id, text)));
   const handleFactCheck = () =>
-    void run("script", "AI가 대본의 사실 주장을 하나씩 확인하는 중…", async (id) => setScripts(await factCheckScript(id)));
+    void run("script", "AI가 대본의 사실 주장을 하나씩 확인하는 중…", async (id) => showScripts(id, await factCheckScript(id)));
 
   // ── 4 voice / style ──
   const handleGenerateVoice = () =>
-    void run("production", "음성 만들고 자막 타이밍 맞추는 중… (1분 정도)", async (id) => setProduction(await generateTtsAudio(id)));
+    void run("production", "음성 만들고 자막 타이밍 맞추는 중… (1분 정도)", async (id) => showProduction(id, await generateTtsAudio(id)));
   async function handleBuildScenes(style: string) {
-    const ok = await run("production", "화풍에 맞춰 씬 구성 중… (Gemini)", async (id) => setProduction(await generateConcepts(id, style)));
+    const ok = await run("production", "화풍에 맞춰 씬 구성 중… (Gemini)", async (id) => showProduction(id, await generateConcepts(id, style)));
     if (ok) setViewStep(5);
   }
 
   // ── 5 scenes (per-scene work runs in parallel, outside the global lock) ──
   async function sceneTask(task: (id: string) => Promise<unknown>) {
-    if (!projectId) return;
+    const id = projectId;
+    if (!id) return;
     try {
-      await task(projectId);
-      setError(null);
+      await task(id);
+      if (onScreen(id)) setError(null);
     } catch (reason) {
       setError(errorText(reason, "씬 작업에 실패했습니다."));
     } finally {
-      await loadProduction(projectId).catch(() => undefined);
+      await loadProduction(id).catch(() => undefined);
       refreshUsage();
     }
   }
 
   // ── 6 final ──
   const handleRender = (title: string) =>
-    void run("production", "렌더링 중… 5분 정도 걸립니다. 창을 닫지 마세요.", async (id) => setProduction(await renderShorts(id, title || undefined)));
+    void run("production", "렌더링 중… 5분 정도 걸립니다. 창을 닫지 마세요.", async (id) => showProduction(id, await renderShorts(id, title || undefined)));
   async function handleTitleChange(title: string) {
     if (!project) return;
     try {
@@ -441,7 +464,7 @@ export default function App() {
         </span>
         <span>
           <b>{item.project_title === "untitled" ? item.display_name : item.project_title}</b>
-          <small>{step}</small>
+          <small>{busyMap[item.project_id] ? `⏳ ${busyMap[item.project_id].text.split("…")[0]}…` : step}</small>
         </span>
       </button>
     );
