@@ -63,3 +63,17 @@ def test_same_search_same_day_survives_restart(tmp_path: Path):
     other = restarted.post("/api/projects", json={"project_title": "y"}).json()["project"]["project_id"]
     again = restarted.post(f"/api/projects/{other}/reference/search", json=body).json()
     assert calls == ["돈 습관"] and [c["video_id"] for c in again["candidates"]] == ["a"]
+
+
+def test_search_without_project_creates_nothing(tmp_path: Path):
+    class FakeYouTube:
+        def __init__(self, key):
+            pass
+
+        def search(self, request):
+            return [_candidate("a", "돈 버는 습관")]
+
+    client = TestClient(create_app(repo_root=tmp_path, youtube_client_factory=FakeYouTube))
+    found = client.post("/api/references/search", json={"keyword": "돈 습관"}).json()
+    assert [c["video_id"] for c in found["candidates"]] == ["a"]
+    assert client.get("/api/projects").json()["projects"] == []

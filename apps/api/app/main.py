@@ -69,14 +69,14 @@ def create_app(
 
     @app.get("/api/usage")
     def usage_today():
-        # Free-tier caps observed in 2026-10: ~20 requests/day per Gemini model, ~200 FLUX images/day on Workers AI.
+        # Free-tier caps observed in 2026-10: ~20 requests/day per Gemini model, ~95 FLUX.2 klein images/day on Workers AI (10k neurons).
         gemini = "generativelanguage" in settings.llm_base_url
         counts = usage.today()
         return {
             "llm": counts["llm"],
             "llm_limit": 20 * (1 + len(settings.llm_fallback_list)) if gemini else None,
             "image": counts["image"],
-            "image_limit": 200 if settings.cloudflare_account_id else None,
+            "image_limit": 95 if settings.cloudflare_account_id else None,  # FLUX.2 klein 768x1344 ≈ 104 neurons of the free 10k
             "tts": counts["tts"],
         }
 

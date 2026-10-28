@@ -120,6 +120,11 @@ export function searchReferences(
   );
 }
 
+/** Search without a project: nothing is created until a video is picked. */
+export function searchReferencesWithoutProject(payload: ReferenceSearchPayload): Promise<{ candidates: readonly ReferenceCandidate[] }> {
+  return request("/api/references/search", { method: "POST", body: JSON.stringify(payload) });
+}
+
 export function addDirectReference(
   projectId: string,
   url: string

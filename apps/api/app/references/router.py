@@ -113,6 +113,18 @@ def create_references_router(
         cache[key] = [c.model_dump() for c in candidates]
         path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
 
+    def cached_search(payload: ReferenceSearchRequest, outputs: Path, settings: AppSettings) -> list[ReferenceCandidate]:
+        cache_key = f"{date.today()}|{payload.model_dump_json()}"
+        candidates = read_search_cache(outputs, cache_key)
+        if candidates is None:
+            client = youtube_client_factory(settings.youtube_api_key)
+            candidates = add_korean_titles(
+                client.search(payload),
+                lambda: analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model),
+            )
+            write_search_cache(outputs, cache_key, candidates)
+        return candidates
+
     def project_dir(outputs_dir: Path, project_id: str) -> Path:
         read_project(outputs_dir, project_id)
         return outputs_dir / project_id
@@ -232,15 +244,7 @@ def create_references_router(
             )
             job_id = job.job_id
             update_job_state(outputs, project_id, job.job_id, "running", "Searching YouTube")
-            cache_key = f"{date.today()}|{payload.model_dump_json()}"
-            candidates = read_search_cache(outputs, cache_key)
-            if candidates is None:
-                client = youtube_client_factory(settings.youtube_api_key)
-                candidates = add_korean_titles(
-                    client.search(payload),
-                    lambda: analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model),
-                )
-                write_search_cache(outputs, cache_key, candidates)
+            candidates = cached_search(payload, outputs, settings)
             write_reference_candidates(project_dir(outputs, project_id), candidates)
             update_job_state(
                 outputs,
@@ -589,4 +593,21 @@ def create_references_router(
                 mark_analysis_failed(outputs, project_id, message)
             raise HTTPException(status_code=400, detail=message) from exc
 
-    return router
+    # Browsing without a project: a project is only created once the user picks a video,
+    # so looking around no longer leaves empty "untitled" projects behind.
+    root = APIRouter()
+
+    @root.post("/api/references/search", tags=["reference"])
+    def search_without_project(
+        payload: ReferenceSearchRequest,
+        outputs: Path = Depends(outputs_dir_provider),
+        settings: AppSettings = Depends(settings_provider),
+    ):
+        try:
+            candidates = cached_search(payload, outputs, settings)
+        except (ValueError, httpx.HTTPError) as exc:
+            raise HTTPException(status_code=400, detail=provider_error_message(exc)) from exc
+        return {"candidates": [candidate.model_dump() for candidate in candidates]}
+
+    root.include_router(router)
+    return root

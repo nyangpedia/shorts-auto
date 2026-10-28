@@ -20,5 +20,5 @@ def test_usage_counts_per_kind_and_reports_limits(tmp_path: Path):
 
     body = client.get("/api/usage").json()
 
-    assert body == {"llm": 2, "llm_limit": 60, "image": 1, "image_limit": 200, "tts": 0}
+    assert body == {"llm": 2, "llm_limit": 60, "image": 1, "image_limit": 95, "tts": 0}
     assert client.get("/api/projects").status_code == 200  # usage file in outputs/ must not break listing

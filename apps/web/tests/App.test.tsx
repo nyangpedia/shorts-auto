@@ -72,18 +72,26 @@ describe("App", () => {
   });
   afterEach(() => cleanup());
 
-  it("creates a project without a browser prompt and opens the title field", async () => {
+  it("browses shorts without creating a project until one is picked", async () => {
     const user = userEvent.setup();
-    const promptSpy = vi.spyOn(window, "prompt");
-    mocked.createProject.mockResolvedValue({ ...project, project_id: "261011_2131", display_name: "261011_2131_untitled" });
+    const pick = { video_id: "v9", url: "https://youtube.com/shorts/v9", title: "고를 쇼츠", vs_ratio: 12 } as never;
+    const created = { ...project, project_id: "261011_2131", display_name: "261011_2131_untitled" };
+    mocked.searchReferencesWithoutProject.mockResolvedValue({ candidates: [pick] });
+    mocked.createProject.mockResolvedValue(created);
+    mocked.addDirectReference.mockResolvedValue({ candidate: pick, candidates: [pick] });
+    mocked.getProject.mockResolvedValue(created);
     render(<App />);
 
     await screen.findByRole("heading", { name: "제목 없음" });
     await user.click(screen.getByRole("button", { name: "+ 새 프로젝트" }));
+    await user.type(screen.getByRole("textbox", { name: "검색어" }), "문어");
+    await user.click(screen.getByRole("button", { name: "검색" }));
+    await user.click(await screen.findByRole("button", { name: "고를 쇼츠 선택" }));
 
-    await waitFor(() => expect(mocked.createProject).toHaveBeenCalledWith("untitled"));
-    expect(screen.getByRole("textbox", { name: "프로젝트 제목" })).toHaveFocus();
-    expect(promptSpy).not.toHaveBeenCalled();
+    await waitFor(() => expect(mocked.selectReference).toHaveBeenCalledWith("261011_2131", "v9"));
+    expect(mocked.createProject).toHaveBeenCalledTimes(1);
+    expect(mocked.createProject).toHaveBeenCalledWith("untitled");
+    expect(mocked.searchReferences).not.toHaveBeenCalled(); // the browse search is project-less
   });
 
   it("saves an edited title with Enter", async () => {

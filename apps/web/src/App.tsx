@@ -32,6 +32,7 @@ import {
   runReferenceAnalysis,
   runReferenceStt,
   searchReferences,
+  searchReferencesWithoutProject,
   selectReference,
   selectScriptCandidate,
   updateFinalScript,
@@ -52,7 +53,7 @@ import { ReferenceStep } from "./components/ReferenceStep";
 import { ScenesStep } from "./components/ScenesStep";
 import { ScriptStep } from "./components/ScriptStep";
 import { VoiceStep } from "./components/VoiceStep";
-import type { ProductionState, Project, ReferenceSearchPayload, ReferenceState, ScriptsState, StepName } from "./types";
+import type { ProductionState, Project, ReferenceCandidate, ReferenceSearchPayload, ReferenceState, ScriptsState, StepName } from "./types";
 import { STEPS, reachedStep, type StepNumber } from "./wizard";
 
 export const APP_NAME = "쇼츠공방";
@@ -68,6 +69,8 @@ const STEP_KO: Record<StepName, string> = {
   Production: "제작",
   Render: "완성"
 };
+
+const STEP_ICON: Record<string, string> = { 레퍼런스: "🔍", 분석: "🧪", 대본: "✍️", 제작: "🎨", 완성: "✅" };
 
 const errorText = (reason: unknown, fallback: string) => (reason instanceof Error ? reason.message : fallback);
 
@@ -85,7 +88,7 @@ export default function App() {
   const [usageToday, setUsageToday] = useState<UsageToday | null>(null);
   // Read the opening URL once; it is cleared after load so a refresh lands on home.
   const linkParams = useRef(new URLSearchParams(window.location.search)).current;
-  const [view, setView] = useState<"home" | "project" | "topics" | "daily" | "settings">(() => {
+  const [view, setView] = useState<"home" | "find" | "project" | "topics" | "daily" | "settings">(() => {
     const params = linkParams;
     const asked = params.get("view");
     if (asked === "topics" || asked === "daily" || asked === "settings") return asked;
@@ -93,7 +96,7 @@ export default function App() {
   });
   const [topics, setTopics] = useState<readonly TopicItem[]>([]);
   const [hiddenTopics, setHiddenTopics] = useState<readonly TopicItem[]>([]);
-  const [freshProjectId, setFreshProjectId] = useState<string | null>(null);
+  const [findCandidates, setFindCandidates] = useState<readonly ReferenceCandidate[]>([]);
   const [daily, setDaily] = useState<DailyState | null>(null);
 
   const refreshUsage = () => void fetchUsage().then(setUsageToday).catch(() => undefined);
@@ -181,16 +184,21 @@ export default function App() {
   const loadProduction = async (id: string) => setProduction(await fetchProductionState(id));
 
   // ── project ──
-  async function handleCreateProject() {
+  // "새 프로젝트" opens the finder; the project itself is created only when a video is picked,
+  // so browsing never leaves empty "untitled" projects behind.
+  const startNewProject = () => setView("find");
+
+  async function handleFindSearch(payload: ReferenceSearchPayload) {
+    if (busy) return;
+    setBusy({ area: "reference", text: "쇼츠 검색 중… (처음 검색은 1분 정도)" });
     try {
-      const created = await createProject("untitled");
-      setProjects((list) => [created, ...list]);
-      setProject(created);
-      setFreshProjectId(created.project_id);
-      setTitleDraft("");
+      setFindCandidates((await searchReferencesWithoutProject(payload)).candidates);
       setError(null);
     } catch (reason) {
-      setError(errorText(reason, "프로젝트를 만들지 못했습니다."));
+      setError(errorText(reason, "검색하지 못했습니다."));
+    } finally {
+      setBusy(null);
+      refreshUsage();
     }
   }
 
@@ -263,15 +271,21 @@ export default function App() {
     }
   }
 
-  const handleUseDaily = (item: DailyItem) =>
+  /** The one place a project is born from a video: finder, daily references, or a pasted link. */
+  const startFromVideo = (url: string, onCreated?: (projectId: string) => void) =>
     void runGlobal("이 쇼츠로 새 프로젝트를 만드는 중…", async () => {
       // Project title doubles as the 0–2s opening title on render; never inherit someone else's video title.
       const created = await createProject("untitled");
-      await addDirectReference(created.project_id, item.url);
-      await selectReference(created.project_id, item.video_id);
-      setDaily((d) => (d ? { ...d, items: d.items.map((i) => (i.video_id === item.video_id ? { ...i, used_by: created.project_id } : i)) } : d));
+      const added = await addDirectReference(created.project_id, url);
+      await selectReference(created.project_id, added.candidate.video_id);
+      onCreated?.(created.project_id);
       return getProject(created.project_id);
     });
+
+  const handleUseDaily = (item: DailyItem) =>
+    startFromVideo(item.url, (createdId) =>
+      setDaily((d) => (d ? { ...d, items: d.items.map((i) => (i.video_id === item.video_id ? { ...i, used_by: createdId } : i)) } : d))
+    );
 
   async function handleDaily(action: () => Promise<DailyState>, text: string) {
     if (busy) return;
@@ -411,6 +425,28 @@ export default function App() {
   const doneProjects = projects.filter(isShelved);
   const activeProjects = projects.filter((p) => !isShelved(p));
 
+  // Thumbnail = first scene image; until one exists, an icon shows how far the project got.
+  const railProject = (item: Project) => {
+    const step = item.generated_files.final_video ? "완성" : STEP_KO[item.current_step] ?? item.current_step;
+    return (
+      <button
+        aria-current={view === "project" && item.project_id === projectId ? "page" : undefined}
+        className="proj"
+        key={item.project_id}
+        onClick={() => handleSelectProject(item)}
+        type="button"
+      >
+        <span aria-hidden="true" className="proj-thumb" data-icon={STEP_ICON[step] ?? "📄"}>
+          <img alt="" onError={(e) => e.currentTarget.remove()} src={`/api/projects/${encodeURIComponent(item.project_id)}/production/scenes/scene_01_start.png`} />
+        </span>
+        <span>
+          <b>{item.project_title === "untitled" ? item.display_name : item.project_title}</b>
+          <small>{step}</small>
+        </span>
+      </button>
+    );
+  };
+
   return (
     <div className="app">
       <aside className="rail" aria-label="프로젝트">
@@ -418,59 +454,25 @@ export default function App() {
           <span aria-hidden="true" className="brand-mark">▶</span>
           <span>{APP_NAME}<small>쇼츠 제작 도구</small></span>
         </button>
-        <button className="new-project" onClick={() => { setView("project"); void handleCreateProject(); }} type="button">+ 새 프로젝트</button>
+        <button aria-current={view === "find" ? "page" : undefined} className="new-project" onClick={startNewProject} type="button">+ 새 프로젝트</button>
         <button aria-current={view === "daily" ? "page" : undefined} className="proj rail-link" onClick={() => setView("daily")} type="button">
           <span aria-hidden="true">📌</span><span><b>오늘의 레퍼런스</b></span>
         </button>
         <button aria-current={view === "topics" ? "page" : undefined} className="proj rail-link" onClick={() => setView("topics")} type="button">
           <span aria-hidden="true">🗂</span><span><b>주제 창고</b><small>남은 주제 {topics.filter((t) => !t.used_by).length}개</small></span>
         </button>
-        <div className="rail-label">프로젝트</div>
+        <div className="rail-section">
+          <span aria-hidden="true">🎬</span><b>진행 중인 프로젝트</b><small>{activeProjects.length}</small>
+        </div>
         <div className="proj-list">
           {projects.length === 0 && !isLoading ? <p className="rail-empty">아직 프로젝트가 없습니다.</p> : null}
-          {activeProjects.map((item) => (
-            <button
-              aria-current={view === "project" && item.project_id === projectId ? "page" : undefined}
-              className="proj"
-              key={item.project_id}
-              onClick={() => handleSelectProject(item)}
-              type="button"
-            >
-              <img
-                alt=""
-                className="proj-thumb"
-                onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                src={`/api/projects/${encodeURIComponent(item.project_id)}/production/scenes/scene_01_start.png`}
-              />
-              <span>
-                <b>{item.project_title === "untitled" ? item.display_name : item.project_title}</b>
-                <small>{STEP_KO[item.current_step] ?? item.current_step}</small>
-              </span>
-            </button>
-          ))}
+          {activeProjects.map(railProject)}
           {doneProjects.length > 0 ? (
             <details className="done-box">
-              <summary>완료·보관함 ({doneProjects.length})</summary>
-              {doneProjects.map((item) => (
-            <button
-                  aria-current={view === "project" && item.project_id === projectId ? "page" : undefined}
-                  className="proj"
-                  key={item.project_id}
-                  onClick={() => handleSelectProject(item)}
-                  type="button"
-                >
-                  <img
-                    alt=""
-                    className="proj-thumb"
-                    onError={(e) => (e.currentTarget.style.visibility = "hidden")}
-                    src={`/api/projects/${encodeURIComponent(item.project_id)}/production/scenes/scene_01_start.png`}
-                  />
-                  <span>
-                    <b>{item.project_title === "untitled" ? item.display_name : item.project_title}</b>
-                    <small>{STEP_KO[item.current_step] ?? item.current_step}</small>
-                  </span>
-                </button>
-              ))}
+              <summary className="rail-section">
+                <span aria-hidden="true">🗄</span><b>완료·보관함</b><small>{doneProjects.length}</small>
+              </summary>
+              {doneProjects.map(railProject)}
             </details>
           ) : null}
         </div>
@@ -486,13 +488,30 @@ export default function App() {
             {error ? (
               <div className="banner bad" role="alert">⚠️ {error} <button className="link-btn" onClick={() => setError(null)} type="button">닫기</button></div>
             ) : null}
-            {view === "settings" ? (
+            {view === "find" ? (
+              <>
+                {busy ? <div className="banner busy">⏳ {busy.text}</div> : null}
+                <p className="muted small" style={{ margin: "0 0 12px" }}>쇼츠를 고르거나 링크를 붙여넣으면 그때 새 프로젝트가 만들어집니다.</p>
+                <ReferenceStep
+                  autoSearch={findCandidates.length === 0}
+                  candidates={findCandidates}
+                  isBusy={busy !== null}
+                  onAddDirect={(url) => startFromVideo(url)}
+                  onSearch={(payload) => void handleFindSearch(payload)}
+                  onSelect={(videoId) => {
+                    const picked = findCandidates.find((c) => c.video_id === videoId);
+                    if (picked) startFromVideo(picked.url);
+                  }}
+                  selectedReference={null}
+                />
+              </>
+            ) : view === "settings" ? (
               <SettingsView onSaved={() => { setError(null); refreshUsage(); refreshKeys(); }} />
             ) : view === "home" ? (
               <HomeView
                 missingKeys={missingKeys}
                 onGo={setView}
-                onNew={() => { setView("project"); void handleCreateProject(); }}
+                onNew={startNewProject}
                 onOpen={handleSelectProject}
                 projects={projects}
                 stepLabel={(p) => (p.generated_files.final_video ? "완성" : STEP_KO[p.current_step] ?? p.current_step)}
@@ -574,7 +593,6 @@ export default function App() {
                   isBusy={busy !== null}
                   onAddDirect={handleAddDirect}
                   onSearch={handleSearch}
-                  autoSearch={project.project_id === freshProjectId}
                   onSelect={handleSelectReference}
                   selectedReference={reference?.selected_reference ?? null}
                 />
@@ -665,7 +683,7 @@ export default function App() {
             <h1>{APP_NAME}</h1>
             <p className="muted">잘 터진 쇼츠의 공식을 분석해 내 쇼츠를 만듭니다.</p>
             {error ? <div className="banner bad">{error}</div> : null}
-            <button className="btn accent" onClick={handleCreateProject} type="button">+ 새 프로젝트 시작</button>
+            <button className="btn accent" onClick={startNewProject} type="button">+ 새 프로젝트 시작</button>
           </div>
         )}
       </section>
