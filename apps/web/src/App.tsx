@@ -7,6 +7,7 @@ import {
   extractReferenceAudio,
   factCheckScript,
   fetchDaily,
+  fetchKeyStatus,
   fetchTopics,
   hideTopics,
   restoreTopics,
@@ -46,6 +47,7 @@ import { DailyView } from "./components/DailyView";
 import { TopicsView } from "./components/TopicsView";
 import { FinalStep } from "./components/FinalStep";
 import { HomeView } from "./components/HomeView";
+import { SettingsView } from "./components/SettingsView";
 import { ReferenceStep } from "./components/ReferenceStep";
 import { ScenesStep } from "./components/ScenesStep";
 import { ScriptStep } from "./components/ScriptStep";
@@ -83,10 +85,10 @@ export default function App() {
   const [usageToday, setUsageToday] = useState<UsageToday | null>(null);
   // Read the opening URL once; it is cleared after load so a refresh lands on home.
   const linkParams = useRef(new URLSearchParams(window.location.search)).current;
-  const [view, setView] = useState<"home" | "project" | "topics" | "daily">(() => {
+  const [view, setView] = useState<"home" | "project" | "topics" | "daily" | "settings">(() => {
     const params = linkParams;
     const asked = params.get("view");
-    if (asked === "topics" || asked === "daily") return asked;
+    if (asked === "topics" || asked === "daily" || asked === "settings") return asked;
     return params.get("project") ? "project" : "home";
   });
   const [topics, setTopics] = useState<readonly TopicItem[]>([]);
@@ -95,6 +97,13 @@ export default function App() {
   const [daily, setDaily] = useState<DailyState | null>(null);
 
   const refreshUsage = () => void fetchUsage().then(setUsageToday).catch(() => undefined);
+  const [missingKeys, setMissingKeys] = useState(0);
+  const REQUIRED_KEYS = ["GEMINI_API_KEY", "YOUTUBE_API_KEY", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN"];
+  const refreshKeys = () =>
+    void Promise.resolve(fetchKeyStatus())
+      .then((r) => setMissingKeys(REQUIRED_KEYS.filter((k) => !r?.keys[k]).length))
+      .catch(() => undefined);
+  useEffect(refreshKeys, []);
   useEffect(refreshUsage, []);
   const loadTopics = () => void fetchTopics().then((r) => { setTopics(r.topics); setHiddenTopics(r.hidden ?? []); }).catch(() => undefined);
   useEffect(loadTopics, []);
@@ -465,6 +474,9 @@ export default function App() {
             </details>
           ) : null}
         </div>
+        <button aria-current={view === "settings" ? "page" : undefined} className="proj rail-link rail-settings" onClick={() => setView("settings")} type="button">
+          <span aria-hidden="true">⚙</span><span><b>설정</b><small>API 키 · 유튜브 계정</small></span>
+        </button>
         {usageToday ? <UsageMeter usage={usageToday} /> : null}
       </aside>
 
@@ -474,8 +486,11 @@ export default function App() {
             {error ? (
               <div className="banner bad" role="alert">⚠️ {error} <button className="link-btn" onClick={() => setError(null)} type="button">닫기</button></div>
             ) : null}
-            {view === "home" ? (
+            {view === "settings" ? (
+              <SettingsView onSaved={() => { setError(null); refreshUsage(); refreshKeys(); }} />
+            ) : view === "home" ? (
               <HomeView
+                missingKeys={missingKeys}
                 onGo={setView}
                 onNew={() => { setView("project"); void handleCreateProject(); }}
                 onOpen={handleSelectProject}

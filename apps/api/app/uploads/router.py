@@ -16,15 +16,24 @@ from urllib.parse import urlencode
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.projects.service import read_project, save_project
 
 CLIENT_SECRET_FILE = "client_secret.json"
 TOKEN_FILE = ".youtube_token.json"
-SCOPE = "https://www.googleapis.com/auth/youtube.upload"
+# Upload, plus read-only channel stats/analytics for the "why didn't it work" review (asked once, at connect).
+SCOPE = " ".join([
+    "https://www.googleapis.com/auth/youtube.upload",
+    "https://www.googleapis.com/auth/youtube.readonly",
+    "https://www.googleapis.com/auth/yt-analytics.readonly",
+])
 REDIRECT_URI = "http://127.0.0.1:8000/api/youtube/callback"
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
+
+
+class ClientSecretRequest(BaseModel):
+    content: str = Field(max_length=20_000)
 
 
 class UploadRequest(BaseModel):
@@ -69,6 +78,25 @@ def create_uploads_router(
     @router.get("/api/youtube/status")
     def status():
         return {"configured": (repo_root / CLIENT_SECRET_FILE).exists(), "connected": refresh_token() is not None}
+
+    @router.put("/api/youtube/client-secret")
+    def save_client_secret(payload: ClientSecretRequest):
+        try:
+            data = json.loads(payload.content)
+            cfg = data.get("installed") or data.get("web") or {}
+            assert all(cfg.get(k) for k in ("client_id", "client_secret", "auth_uri", "token_uri"))
+        except (ValueError, AttributeError, AssertionError) as exc:
+            raise HTTPException(status_code=400, detail="구글 클라우드에서 받은 OAuth 클라이언트 JSON 파일이 아닙니다.") from exc
+        if "installed" not in data:
+            raise HTTPException(status_code=400, detail="'데스크톱 앱' 유형으로 만든 OAuth 클라이언트가 필요합니다.")
+        (repo_root / CLIENT_SECRET_FILE).write_text(json.dumps(data), encoding="utf-8")
+        (repo_root / TOKEN_FILE).unlink(missing_ok=True)  # a new client invalidates the old login
+        return status()
+
+    @router.delete("/api/youtube/connection")
+    def disconnect():
+        (repo_root / TOKEN_FILE).unlink(missing_ok=True)
+        return status()
 
     @router.get("/api/youtube/connect")
     def connect():

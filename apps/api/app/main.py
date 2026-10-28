@@ -19,6 +19,7 @@ from app.scripts.router import create_scripts_router
 from app.topics.router import create_topics_router
 from app.daily.router import create_daily_router
 from app.uploads.router import create_uploads_router
+from app.core.keys_router import create_keys_router
 
 
 def create_app(
@@ -39,7 +40,8 @@ def create_app(
         else:
             transcription_client_factory = OpenAITranscriptionClient
 
-    if analysis_client_factory is OpenAIAnalysisClient and settings.llm_base_url:
+    if analysis_client_factory is OpenAIAnalysisClient:
+        # Reads settings at call time so keys saved from the settings screen apply without a restart.
         analysis_client_factory = lambda key, model: OpenAIAnalysisClient(key, model, settings.llm_base_url, settings.llm_fallback_list)
 
     outputs_dir = root / settings.output_dir
@@ -110,6 +112,7 @@ def create_app(
     app.include_router(create_topics_router(outputs_dir_provider))
     app.include_router(create_daily_router(outputs_dir_provider, settings_provider, youtube_client_factory))
     app.include_router(create_uploads_router(root, outputs_dir_provider, upload_transport))
+    app.include_router(create_keys_router(root, settings_provider))
     return app
 
 

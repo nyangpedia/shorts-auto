@@ -284,3 +284,17 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--ink-2); fo
 .trend-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
 .trend-hit { fill: transparent; cursor: default; }
 .trend-hit:hover { fill: var(--accent-soft); }
+
+/* ── settings ── */
+.banner.ok { background: var(--ok-soft); color: #0b6b44; }
+.keys { display: grid; gap: 10px; margin-bottom: 14px; }
+.key-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 320px) 64px; gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.key-row:last-child { border-bottom: 0; }
+.steps-guide { margin: 0 0 12px; padding-left: 20px; display: grid; gap: 14px; line-height: 1.7; }
+.steps-guide li.done::marker { color: var(--ok); font-weight: 800; }
+.file-btn { position: relative; overflow: hidden; margin-left: 8px; cursor: pointer; }
+.file-btn input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.rail-settings { margin-top: auto; }
+@media (max-width: 900px) {
+  .key-row { grid-template-columns: 1fr; }
+}

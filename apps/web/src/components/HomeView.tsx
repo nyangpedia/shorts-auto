@@ -6,7 +6,9 @@ interface HomeViewProps {
   readonly stepLabel: (project: Project) => string;
   readonly onNew: () => void;
   readonly onOpen: (project: Project) => void;
-  readonly onGo: (view: "daily" | "topics") => void;
+  readonly onGo: (view: "daily" | "topics" | "settings") => void;
+  /** Required API keys still empty — first run on a fresh install. */
+  readonly missingKeys: number;
 }
 
 // Two a day for the topic experiment (3 topics × 8–10 videos over two weeks).
@@ -16,7 +18,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const thumb = (p: Project) => `/api/projects/${encodeURIComponent(p.project_id)}/production/scenes/scene_01_start.png`;
 const name = (p: Project) => (p.project_title === "untitled" ? p.display_name : p.project_title);
 
-export function HomeView({ projects, topicsLeft, stepLabel, onNew, onOpen, onGo }: HomeViewProps) {
+export function HomeView({ projects, topicsLeft, stepLabel, onNew, onOpen, onGo, missingKeys }: HomeViewProps) {
   const now = Date.now();
   const thisWeek = projects.filter((p) => now - Date.parse(p.updated_at) < WEEK_MS);
   const madeThisWeek = thisWeek.filter((p) => p.generated_files.final_video).length;
@@ -29,6 +31,12 @@ export function HomeView({ projects, topicsLeft, stepLabel, onNew, onOpen, onGo 
 
   return (
     <div className="stack home">
+      {missingKeys > 0 ? (
+        <div className="banner warn" role="status">
+          ⚙ 필수 API 키 {missingKeys}개가 비어 있어 일부 기능이 동작하지 않습니다.{" "}
+          <button className="link-btn" onClick={() => onGo("settings")} type="button">설정에서 넣기 →</button>
+        </div>
+      ) : null}
       <section className="hero">
         <div>
           <span className="hero-date">{today}</span>

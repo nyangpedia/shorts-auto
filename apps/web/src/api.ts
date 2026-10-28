@@ -67,6 +67,23 @@ export interface YouTubeUploadResult {
   readonly studio_url: string;
 }
 
+export function fetchKeyStatus(): Promise<{ keys: Readonly<Record<string, boolean>> }> {
+  return request("/api/settings/keys");
+}
+
+/** Keys go to the server's .env; the response only says which are set. "" clears one. */
+export function saveKeys(values: Readonly<Record<string, string>>): Promise<{ keys: Readonly<Record<string, boolean>> }> {
+  return request("/api/settings/keys", { method: "PUT", body: JSON.stringify({ values }) });
+}
+
+export function saveClientSecret(content: string): Promise<YouTubeStatus> {
+  return request("/api/youtube/client-secret", { method: "PUT", body: JSON.stringify({ content }) });
+}
+
+export function disconnectYouTube(): Promise<YouTubeStatus> {
+  return request("/api/youtube/connection", { method: "DELETE" });
+}
+
 export function fetchYouTubeStatus(): Promise<YouTubeStatus> {
   return request("/api/youtube/status");
 }
