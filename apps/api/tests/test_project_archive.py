@@ -77,3 +77,19 @@ def test_search_without_project_creates_nothing(tmp_path: Path):
     found = client.post("/api/references/search", json={"keyword": "돈 습관"}).json()
     assert [c["video_id"] for c in found["candidates"]] == ["a"]
     assert client.get("/api/projects").json()["projects"] == []
+
+
+def test_slow_title_translation_does_not_hold_search(monkeypatch):
+    import time
+    from app.references import router as reference_router
+
+    monkeypatch.setattr(reference_router, "TRANSLATE_TIMEOUT", 0.2)
+
+    class Stalled:
+        def analyze(self, prompt):
+            time.sleep(2)
+            return {"titles": ["늦은 번역"]}
+
+    started = time.time()
+    out = reference_router.add_korean_titles([_candidate("b", "賢い人ほど謝る")], lambda: Stalled())
+    assert time.time() - started < 1.5 and out[0].title_ko is None

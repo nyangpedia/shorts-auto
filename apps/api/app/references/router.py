@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from concurrent.futures import ThreadPoolExecutor
 import logging
 import re
 from datetime import date
@@ -48,6 +49,7 @@ logger = logging.getLogger(__name__)
 SCRIPT_GENERATED_FILE_KEYS = SCRIPT_FILE_KEYS  # older name, imported elsewhere
 SEARCH_CACHE_FILE = "_search_cache.json"
 _HANGUL = re.compile(r"[가-힣]")
+TRANSLATE_TIMEOUT = 45  # seconds
 AFTER_STT = WORKFLOW_STEPS[2:]  # Analysis … Render
 AFTER_ANALYSIS = ("Candidates", "Script", "Production", "Render")
 
@@ -62,11 +64,16 @@ def add_korean_titles(candidates: list[ReferenceCandidate], make_client: Callabl
         "다음 유튜브 쇼츠 제목들이 무슨 내용인지 한국어로 짧게(30자 이내) 옮겨라. "
         "해시태그는 빼고 내용만. 같은 순서로 JSON {\"titles\": [\"...\"]} 만 출력.\n\n" + lines
     )
+    # Translation is a nicety: never fail the search over it, and never let a stalled model (the fallback
+    # chain can wait minutes per model) hold the results back.
+    pool = ThreadPoolExecutor(max_workers=1)
     try:
-        titles = make_client().analyze(prompt)["titles"]
-    except Exception as exc:  # translation is a nicety; never fail the search over it
-        logger.warning("title translation skipped: %s", exc)
+        titles = pool.submit(lambda: make_client().analyze(prompt)["titles"]).result(timeout=TRANSLATE_TIMEOUT)
+    except Exception as exc:
+        logger.warning("title translation skipped: %s", exc or "timed out")
         return candidates
+    finally:
+        pool.shutdown(wait=False)
     if len(titles) != len(foreign):
         return candidates
     glossed = {c.video_id: str(t).strip() for c, t in zip(foreign, titles)}
