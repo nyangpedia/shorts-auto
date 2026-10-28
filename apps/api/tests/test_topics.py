@@ -27,3 +27,7 @@ def test_topics_are_collected_and_starting_one_copies_the_analysis(tmp_path: Pat
 
     after = [(t["title"], t["used_by"]) for t in client.get("/api/topics").json()["topics"]]
     assert after == [("주제 하나", None), ("주제 둘", new_id)]  # no duplicates from the copied analysis
+
+    left = client.post("/api/topics/hide", json={"ids": [f"{source}:0"]}).json()["topics"]
+    assert [t["title"] for t in left] == ["주제 둘"]
+    assert client.post(f"/api/topics/{source}/0/start").status_code == 404

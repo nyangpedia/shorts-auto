@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+import { FormEvent, useEffect, useRef, useState } from "react";
 
 import type { DailyItem, DailyState } from "../api";
 
@@ -20,7 +20,15 @@ export function DailyView({ daily, isBusy, busyText, onSaveKeywords, onRefresh, 
   const [draft, setDraft] = useState("");
   useEffect(() => setKeywords(daily?.keywords ?? []), [daily?.keywords]);
 
-  const today = new Date().toISOString().slice(0, 10);
+  const today = new Date().toLocaleDateString("sv-SE"); // local YYYY-MM-DD, same day boundary as the API
+
+  // Opening the view is the daily trigger: fetch once if today's batch isn't there yet.
+  const autoFetched = useRef(false);
+  useEffect(() => {
+    if (autoFetched.current || !daily || isBusy || daily.keywords.length === 0 || daily.fetched_on === today) return;
+    autoFetched.current = true;
+    onRefresh(false);
+  }, [daily, isBusy, today, onRefresh]);
   const changed = JSON.stringify(keywords) !== JSON.stringify(daily?.keywords ?? []);
 
   function add(event: FormEvent) {
@@ -34,7 +42,7 @@ export function DailyView({ daily, isBusy, busyText, onSaveKeywords, onRefresh, 
     <div className="stack">
       <div className="section-head">
         <h2>오늘의 레퍼런스</h2>
-        <p>내 분야 키워드로 최근 7일 쇼츠를 하루 한 번 모읍니다. 하루당 조회수 순서입니다.</p>
+        <p>내 분야 키워드로 최근 7일 쇼츠를 모읍니다. 하루 중 처음 열 때 자동으로 새로 가져오고, 하루당 조회수 순서입니다.</p>
       </div>
       {busyText ? <div className="banner busy">⏳ {busyText}</div> : null}
 

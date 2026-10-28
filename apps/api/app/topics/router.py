@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Callable
 
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 
 from app.projects.router import MAX_PROJECT_ID_ATTEMPTS, timestamp_id
 from app.projects.service import create_project, list_projects, read_project, save_project
@@ -20,6 +21,7 @@ from app.references.files import (
 )
 
 USED_TOPICS_FILE = "_topics_used.json"
+HIDDEN_TOPICS_FILE = "_topics_hidden.json"  # topics removed from the 창고; analyses stay untouched
 COPIED_FILES = [REFERENCE_SCRIPT_FILE, REFERENCE_ANALYSIS_FILE, REFERENCE_ANALYSIS_MARKDOWN_FILE, SELECTED_REFERENCE_FILE]
 
 
@@ -32,6 +34,7 @@ def _read_json(path: Path) -> dict:
 
 def collect_topics(outputs: Path) -> list[dict]:
     used = _read_json(outputs / USED_TOPICS_FILE)
+    hidden = set(_read_json(outputs / HIDDEN_TOPICS_FILE).get("ids", []))
     topics = []
     for project in list_projects(outputs):
         analysis_path = outputs / project.project_id / REFERENCE_ANALYSIS_FILE
@@ -42,6 +45,8 @@ def collect_topics(outputs: Path) -> list[dict]:
         created = datetime.fromtimestamp(analysis_path.stat().st_mtime).isoformat(timespec="minutes")
         for index, topic in enumerate(analysis.get("recommended_topics") or []):
             topic_id = f"{project.project_id}:{index}"
+            if topic_id in hidden:
+                continue
             topics.append({
                 "id": topic_id,
                 "source_project_id": project.project_id,
@@ -57,11 +62,22 @@ def collect_topics(outputs: Path) -> list[dict]:
     return unused + [t for t in topics if t["used_by"]]
 
 
+class HideTopicsRequest(BaseModel):
+    ids: list[str]
+
+
 def create_topics_router(outputs_dir_provider: Callable[[], Path]) -> APIRouter:
     router = APIRouter(prefix="/api/topics", tags=["topics"])
 
     @router.get("")
     def get_topics(outputs: Path = Depends(outputs_dir_provider)):
+        return {"topics": collect_topics(outputs)}
+
+    @router.post("/hide")
+    def hide_topics(payload: HideTopicsRequest, outputs: Path = Depends(outputs_dir_provider)):
+        path = outputs / HIDDEN_TOPICS_FILE
+        hidden = set(_read_json(path).get("ids", [])) | set(payload.ids)
+        path.write_text(json.dumps({"ids": sorted(hidden)}, ensure_ascii=False), encoding="utf-8")
         return {"topics": collect_topics(outputs)}
 
     @router.post("/{source_project_id}/{index}/start")

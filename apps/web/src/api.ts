@@ -339,6 +339,10 @@ export function fetchTopics(): Promise<{ topics: readonly TopicItem[] }> {
   return request("/api/topics");
 }
 
+export function hideTopics(ids: readonly string[]): Promise<{ topics: readonly TopicItem[] }> {
+  return request("/api/topics/hide", { method: "POST", body: JSON.stringify({ ids }) });
+}
+
 export function startTopic(topic: TopicItem): Promise<{ project: Project; feedback: string }> {
   const index = topic.id.split(":")[1];
   return request(`/api/topics/${encodeURIComponent(topic.source_project_id)}/${index}/start`, { method: "POST" });

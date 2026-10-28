@@ -1,4 +1,4 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 
 import type { DurationFilter, ReferenceCandidate, ReferenceSearchPayload } from "../types";
 
@@ -9,6 +9,8 @@ interface ReferenceStepProps {
   readonly onSearch: (payload: ReferenceSearchPayload) => void;
   readonly onAddDirect: (url: string) => void;
   readonly onSelect: (videoId: string) => void;
+  /** New project: re-run the last genre the user picked so results are waiting. */
+  readonly autoSearch?: boolean;
 }
 
 const DURATIONS: readonly { value: DurationFilter; label: string; max: number }[] = [
@@ -37,7 +39,16 @@ const fmt = (value: number | null) => (value === null ? "-" : new Intl.NumberFor
 const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
 const fmtRatio = (r: number | null) => (r === null ? null : `${r >= 10 ? Math.round(r) : r.toFixed(1)}배`);
 
-export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch, onAddDirect, onSelect }: ReferenceStepProps) {
+const LAST_GENRE_KEY = "shorts.lastGenre";
+const readLastGenre = () => {
+  try {
+    return GENRES.find((g) => g.label === localStorage.getItem(LAST_GENRE_KEY)) ?? null;
+  } catch {
+    return null;
+  }
+};
+
+export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch, onAddDirect, onSelect, autoSearch }: ReferenceStepProps) {
   const [keyword, setKeyword] = useState("");
   const [genre, setGenre] = useState<string | null>(null);
   const [duration, setDuration] = useState<DurationFilter>("under_180");
@@ -49,9 +60,31 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
 
   function search(event: FormEvent) {
     event.preventDefault();
-    if (isBusy || (!keyword.trim() && !channel.trim())) return;
+    runSearch(keyword);
+  }
+
+  function pickGenre(g: (typeof GENRES)[number]) {
+    setGenre(g.label);
+    setKeyword(g.keyword);
+    try {
+      localStorage.setItem(LAST_GENRE_KEY, g.label);
+    } catch {
+      // remembering the genre is a convenience only
+    }
+    runSearch(g.keyword);
+  }
+
+  useEffect(() => {
+    const last = readLastGenre();
+    if (autoSearch && last && candidates.length === 0 && !selectedReference) pickGenre(last);
+    // run once per mount of a fresh project
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  function runSearch(text: string) {
+    if (isBusy || (!text.trim() && !channel.trim())) return;
     onSearch({
-      keyword: keyword.trim() || undefined,
+      keyword: text.trim() || undefined,
       channel_query: channel.trim() || undefined,
       published_after: after || undefined,
       published_before: after ? new Date().toISOString().slice(0, 10) : undefined,
@@ -92,7 +125,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
             <button
               aria-pressed={genre === g.label}
               key={g.label}
-              onClick={() => { setGenre(g.label); setKeyword(g.keyword); }}
+              onClick={() => pickGenre(g)}
               type="button"
             >
               {g.label}
@@ -100,7 +133,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
           ))}
         </div>
         <p className="muted small" style={{ margin: "10px 0 0" }}>
-          해외 쇼츠는 그 나라 말 키워드로만 나옵니다. 쉼표로 나눈 키워드마다 검색하며, 키워드 1개당 YouTube 무료 한도 100포인트(하루 10,000)를 씁니다.
+          분야를 누르면 바로 검색하고, 새 프로젝트에선 마지막 분야로 자동 검색합니다. 해외 쇼츠는 그 나라 말 키워드로만 나옵니다. 쉼표로 나눈 키워드마다 검색하며, 키워드 1개당 YouTube 무료 한도 100포인트(하루 10,000)를 씁니다.
         </p>
         <details className="more">
           <summary>상세 조건 (채널, 기간, 조회수)</summary>

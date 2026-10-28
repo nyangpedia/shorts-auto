@@ -8,6 +8,7 @@ import {
   factCheckScript,
   fetchDaily,
   fetchTopics,
+  hideTopics,
   fetchUsage,
   refreshDaily,
   saveDailyKeywords,
@@ -83,6 +84,7 @@ export default function App() {
     return asked === "topics" || asked === "daily" ? asked : "project";
   });
   const [topics, setTopics] = useState<readonly TopicItem[]>([]);
+  const [freshProjectId, setFreshProjectId] = useState<string | null>(null);
   const [daily, setDaily] = useState<DailyState | null>(null);
 
   const refreshUsage = () => void fetchUsage().then(setUsageToday).catch(() => undefined);
@@ -166,6 +168,7 @@ export default function App() {
       const created = await createProject("untitled");
       setProjects((list) => [created, ...list]);
       setProject(created);
+      setFreshProjectId(created.project_id);
       setTitleDraft("");
       setError(null);
     } catch (reason) {
@@ -231,6 +234,14 @@ export default function App() {
       await generateScriptCandidates(started.project.project_id, started.feedback);
       return getProject(started.project.project_id);
     });
+
+  async function handleHideTopics(ids: readonly string[]) {
+    try {
+      setTopics((await hideTopics(ids)).topics);
+    } catch (reason) {
+      setError(errorText(reason, "주제를 지우지 못했습니다."));
+    }
+  }
 
   const handleUseDaily = (item: DailyItem) =>
     void runGlobal("이 쇼츠로 새 프로젝트를 만드는 중…", async () => {
@@ -453,7 +464,7 @@ export default function App() {
               <div className="banner bad" role="alert">⚠️ {error} <button className="link-btn" onClick={() => setError(null)} type="button">닫기</button></div>
             ) : null}
             {view === "topics" ? (
-              <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
+              <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} onHide={(ids) => void handleHideTopics(ids)} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
             ) : (
               <DailyView
                 busyText={busy?.text ?? null}
@@ -528,6 +539,7 @@ export default function App() {
                   isBusy={busy !== null}
                   onAddDirect={handleAddDirect}
                   onSearch={handleSearch}
+                  autoSearch={project.project_id === freshProjectId}
                   onSelect={handleSelectReference}
                   selectedReference={reference?.selected_reference ?? null}
                 />

@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { TopicItem } from "../api";
 
 interface TopicsViewProps {
@@ -6,9 +8,22 @@ interface TopicsViewProps {
   readonly busyText: string | null;
   readonly onStart: (topic: TopicItem) => void;
   readonly onOpenProject: (projectId: string) => void;
+  readonly onHide: (ids: readonly string[]) => void;
 }
 
-export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject }: TopicsViewProps) {
+export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, onHide }: TopicsViewProps) {
+  const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
+  const toggle = (id: string) => setPicked((s) => {
+    const next = new Set(s);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    return next;
+  });
+  function hide(ids: readonly string[], question: string) {
+    if (ids.length === 0 || !window.confirm(question)) return;
+    onHide(ids);
+    setPicked(new Set());
+  }
   const unused = topics.filter((t) => !t.used_by);
   const used = topics.filter((t) => t.used_by);
 
@@ -19,6 +34,16 @@ export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject }:
         <span className="chip accent">남은 주제 {unused.length}개</span>
         <p>레퍼런스를 분석할 때마다 추천 주제 5개가 여기 쌓입니다. 고르면 그 분석을 가져와 새 프로젝트에서 바로 대본 초안을 만듭니다.</p>
       </div>
+      {topics.length > 0 ? (
+        <div className="row">
+          <button className="btn" disabled={picked.size === 0} onClick={() => hide([...picked], `선택한 주제 ${picked.size}개를 지울까요?`)} type="button">
+            선택 삭제 ({picked.size})
+          </button>
+          <button className="btn" onClick={() => hide(topics.map((t) => t.id), `주제 ${topics.length}개를 모두 비울까요? 분석 결과와 프로젝트는 그대로 남습니다.`)} type="button">
+            전체 비우기
+          </button>
+        </div>
+      ) : null}
       {busyText ? <div className="banner busy">⏳ {busyText}</div> : null}
 
       {topics.length === 0 ? (
@@ -27,7 +52,7 @@ export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject }:
         <div className="topics">
           {[...unused, ...used].map((topic) => (
             <div className="topic" key={topic.id} style={topic.used_by ? { opacity: 0.55 } : undefined}>
-              <span className="topic-n">{topic.category ? "•" : ""}</span>
+              <input aria-label={`${topic.title} 선택`} checked={picked.has(topic.id)} onChange={() => toggle(topic.id)} type="checkbox" />
               <span>
                 <b>{topic.title}</b>
                 {topic.hook ? <small>훅: “{topic.hook}”</small> : null}
