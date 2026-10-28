@@ -232,3 +232,5 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--ink-2); fo
 
 .rail-link { grid-template-columns: 34px minmax(0, 1fr); }
 .rail-link > span:first-child { width: 34px; text-align: center; font-size: 18px; }
+.ref-ko { display: block; margin-top: 4px; font-size: 12px; color: #c2410c; line-height: 1.35; }
+.link-btn.danger { color: #c0392b; }

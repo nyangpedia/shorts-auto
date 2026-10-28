@@ -1,6 +1,7 @@
 import json
 import os
 import re
+import shutil
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -124,6 +125,19 @@ def update_project_title(outputs_dir: Path, project_id: str, project_title: str)
     project.updated_at = utc_now_iso()
     _write_project(outputs_dir, project, create_missing=False)
     return project
+
+
+def set_project_archived(outputs_dir: Path, project_id: str, archived: bool) -> Project:
+    project = read_project(outputs_dir, project_id)
+    project.archived = archived
+    project.updated_at = utc_now_iso()
+    _write_project(outputs_dir, project, create_missing=False)
+    return project
+
+
+def delete_project(outputs_dir: Path, project_id: str) -> None:
+    read_project(outputs_dir, project_id)  # 404s on unknown ids before anything is removed
+    shutil.rmtree(_project_path(outputs_dir, project_id))
 
 
 def update_project_step(

@@ -56,6 +56,10 @@ export function updateProject(projectId: string, payload: UpdateProjectPayload):
   }).then((data) => data.project);
 }
 
+export function deleteProject(projectId: string): Promise<unknown> {
+  return request(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
+}
+
 export function fetchReferenceState(projectId: string): Promise<ReferenceState> {
   return request<ReferenceState>(`/api/projects/${encodeURIComponent(projectId)}/reference`);
 }

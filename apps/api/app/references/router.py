@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import re
 from pathlib import Path
 from typing import Callable
 
@@ -32,6 +34,7 @@ from app.references.files import (
 )
 from app.references.models import (
     DirectReferenceRequest,
+    ReferenceCandidate,
     ReferenceSearchRequest,
     SelectReferenceRequest,
 )
@@ -51,6 +54,31 @@ SCRIPT_GENERATED_FILE_KEYS = [
     "final_script",
     "final_script_state",
 ]
+
+
+logger = logging.getLogger(__name__)
+_HANGUL = re.compile(r"[가-힣]")
+
+
+def add_korean_titles(candidates: list[ReferenceCandidate], make_client: Callable[[], AnalysisClient]) -> list[ReferenceCandidate]:
+    """One LLM call glosses every non-Korean title; search still succeeds if it fails."""
+    foreign = [c for c in candidates if not _HANGUL.search(c.title)]
+    if not foreign:
+        return candidates
+    lines = "\n".join(f"{i}. {c.title}" for i, c in enumerate(foreign))
+    prompt = (
+        "다음 유튜브 쇼츠 제목들이 무슨 내용인지 한국어로 짧게(30자 이내) 옮겨라. "
+        "해시태그는 빼고 내용만. 같은 순서로 JSON {\"titles\": [\"...\"]} 만 출력.\n\n" + lines
+    )
+    try:
+        titles = make_client().analyze(prompt)["titles"]
+    except Exception as exc:  # translation is a nicety; never fail the search over it
+        logger.warning("title translation skipped: %s", exc)
+        return candidates
+    if len(titles) != len(foreign):
+        return candidates
+    glossed = {c.video_id: str(t).strip() for c, t in zip(foreign, titles)}
+    return [c.model_copy(update={"title_ko": glossed.get(c.video_id)}) for c in candidates]
 
 
 def create_references_router(
@@ -184,6 +212,9 @@ def create_references_router(
             update_job_state(outputs, project_id, job.job_id, "running", "Searching YouTube")
             client = youtube_client_factory(settings.youtube_api_key)
             candidates = client.search(payload)
+            candidates = add_korean_titles(
+                candidates, lambda: analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model)
+            )
             write_reference_candidates(project_dir(outputs, project_id), candidates)
             update_job_state(
                 outputs,

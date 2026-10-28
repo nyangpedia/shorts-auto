@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import {
   addDirectReference,
   createProject,
+  deleteProject,
   extractReferenceAudio,
   factCheckScript,
   fetchDaily,
@@ -169,6 +170,29 @@ export default function App() {
       setError(null);
     } catch (reason) {
       setError(errorText(reason, "프로젝트를 만들지 못했습니다."));
+    }
+  }
+
+  async function handleArchive(archived: boolean) {
+    if (!project) return;
+    try {
+      storeProject(await updateProject(project.project_id, { archived }));
+    } catch (reason) {
+      setError(errorText(reason, "보관하지 못했습니다."));
+    }
+  }
+
+  async function handleDelete() {
+    if (!project || busy) return;
+    if (!window.confirm(`"${project.display_name}" 프로젝트를 삭제할까요? 영상·이미지·대본 파일이 모두 지워지고 되돌릴 수 없습니다.`)) return;
+    try {
+      await deleteProject(project.project_id);
+      const rest = projects.filter((p) => p.project_id !== project.project_id);
+      setProjects(rest);
+      setProject(rest[0] ?? null);
+      loadTopics();
+    } catch (reason) {
+      setError(errorText(reason, "삭제하지 못했습니다."));
     }
   }
 
@@ -351,9 +375,10 @@ export default function App() {
     production?.has_final_video ? "렌더링 완료 · 업로드 전 확인을 체크하세요" : "렌더링하세요"
   ][viewStep - 1];
 
-  // Rendered projects move into a collapsed box so the rail only lists work in progress.
-  const doneProjects = projects.filter((p) => p.generated_files.final_video);
-  const activeProjects = projects.filter((p) => !p.generated_files.final_video);
+  // Rendered or archived projects move into a collapsed box so the rail only lists work in progress.
+  const isShelved = (p: Project) => Boolean(p.archived || p.generated_files.final_video);
+  const doneProjects = projects.filter(isShelved);
+  const activeProjects = projects.filter((p) => !isShelved(p));
 
   return (
     <div className="app">
@@ -394,7 +419,7 @@ export default function App() {
           ))}
           {doneProjects.length > 0 ? (
             <details className="done-box">
-              <summary>완료함 ({doneProjects.length})</summary>
+              <summary>완료·보관함 ({doneProjects.length})</summary>
               {doneProjects.map((item) => (
             <button
                   aria-current={view === "project" && item.project_id === projectId ? "page" : undefined}
@@ -449,6 +474,8 @@ export default function App() {
                   <>
                     <h1>{project.project_title === "untitled" ? "제목 없음" : project.project_title}</h1>
                     <button className="link-btn" onClick={() => setTitleDraft(project.project_title === "untitled" ? "" : project.project_title)} type="button">✎ 제목 수정</button>
+                    <button className="link-btn" onClick={() => void handleArchive(!project.archived)} type="button">{project.archived ? "↩ 보관 해제" : "🗄 보관함으로"}</button>
+                    <button className="link-btn danger" onClick={() => void handleDelete()} type="button">🗑 삭제</button>
                   </>
                 ) : (
                   <form className="title-edit" onSubmit={(e) => { e.preventDefault(); void handleSaveTitle(); }}>

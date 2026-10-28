@@ -52,6 +52,7 @@ export interface Project {
   readonly settings_snapshot: Readonly<Record<string, unknown>>;
   readonly job_history: readonly JobRecord[];
   readonly generated_files: Readonly<Record<string, string>>;
+  readonly archived?: boolean;
 }
 
 export interface ProjectsResponse {
@@ -79,7 +80,8 @@ export interface CreateProjectPayload {
 }
 
 export interface UpdateProjectPayload {
-  readonly project_title: string;
+  readonly project_title?: string;
+  readonly archived?: boolean;
 }
 
 export interface ReferenceCandidate {
@@ -95,6 +97,7 @@ export interface ReferenceCandidate {
   readonly subscriber_count: number | null;
   readonly source_type: "search" | "direct";
   readonly vs_ratio: number | null;
+  readonly title_ko?: string | null;
 }
 
 export interface ReferenceState {

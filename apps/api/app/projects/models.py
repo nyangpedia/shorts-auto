@@ -40,6 +40,7 @@ class Project(BaseModel):
     settings_snapshot: dict = Field(default_factory=dict)
     job_history: list[dict] = Field(default_factory=list)
     generated_files: dict[str, str] = Field(default_factory=dict)
+    archived: bool = False
 
 
 def utc_now_iso() -> str:

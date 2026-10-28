@@ -40,6 +40,8 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 백엔드: `apps/api`에서 `.venv/Scripts/python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 --reload`
 - 화면: 루트에서 `npx -y pnpm@9 dev:web` → http://127.0.0.1:5173 (VS Code 미리보기보다 크롬 권장)
 - **주의:** `--reload`가 스크립트로 쓴 파일 변경을 놓치는 경우가 있음. 코드 바꾼 뒤 예전처럼 동작하면 서버 재시작
+- **재시작할 때:** 8000번 포트 프로세스만 죽이면 예전 워커(`multiprocessing spawn_main` python)가 소켓을 쥔 채 남아 옛 코드로 응답함. 그 python 프로세스도 같이 종료할 것.
+- 프로젝트 보관(`archived`)·삭제(`DELETE /api/projects/{id}`), 렌더 완료·보관 프로젝트는 사이드바 "완료·보관함"으로. 레퍼런스 검색 시 외국어 제목은 LLM 1회 호출로 한국어 뜻(`title_ko`)을 붙임(실패해도 검색은 성공).
 - 전체 자동 점검: `tools/dev/e2e_smoke.py <레퍼런스 음성.wav>` (서버 켠 상태에서, Gemini 한도 5~6회 소모)
 - 테스트 프로젝트: `outputs/261023_1711`(피라미드, 웹툰 화풍). `outputs/261026_1249`는 **사용자 작업용이라 건드리지 말 것**
 

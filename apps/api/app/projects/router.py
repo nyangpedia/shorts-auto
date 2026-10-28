@@ -2,12 +2,19 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.projects.service import create_project, list_projects, read_project, update_project_title
+from app.projects.service import (
+    create_project,
+    delete_project,
+    list_projects,
+    read_project,
+    set_project_archived,
+    update_project_title,
+)
 
 
 MAX_PROJECT_ID_ATTEMPTS = 1440
@@ -18,7 +25,8 @@ class CreateProjectRequest(BaseModel):
 
 
 class UpdateProjectRequest(BaseModel):
-    project_title: str
+    project_title: Optional[str] = None
+    archived: Optional[bool] = None
 
 
 def timestamp_id(offset_minutes: int = 0) -> str:
@@ -74,9 +82,21 @@ def create_projects_router(outputs_dir_provider: Callable[[], Path]) -> APIRoute
         outputs: Path = Depends(outputs_dir),
     ):
         try:
-            project = update_project_title(outputs, project_id, payload.project_title)
+            project = read_project(outputs, project_id)
+            if payload.project_title is not None:
+                project = update_project_title(outputs, project_id, payload.project_title)
+            if payload.archived is not None:
+                project = set_project_archived(outputs, project_id, payload.archived)
         except (FileNotFoundError, ValueError) as exc:
             _raise_project_error(exc)
         return _project_response(project)
+
+    @router.delete("/{project_id}")
+    def remove_project(project_id: str, outputs: Path = Depends(outputs_dir)):
+        try:
+            delete_project(outputs, project_id)
+        except (FileNotFoundError, ValueError) as exc:
+            _raise_project_error(exc)
+        return {"deleted": project_id}
 
     return router

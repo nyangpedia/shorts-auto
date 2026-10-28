@@ -107,6 +107,7 @@ class ReferenceCandidate(BaseModel):
     view_count: int = Field(ge=0)
     subscriber_count: Optional[int] = Field(default=None, ge=0)
     source_type: SourceType
+    title_ko: Optional[str] = None  # Korean gloss of a foreign title, filled after search
 
     @field_validator(
         "video_id",

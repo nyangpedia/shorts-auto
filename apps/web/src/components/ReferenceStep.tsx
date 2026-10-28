@@ -153,6 +153,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
               </div>
               <div className="ref-body">
                 <b>{c.title}</b>
+                {c.title_ko && <span className="ref-ko">🇰🇷 {c.title_ko}</span>}
                 <small>{c.channel_name} · 조회수 {fmt(c.view_count)}</small>
               </div>
             </button>
