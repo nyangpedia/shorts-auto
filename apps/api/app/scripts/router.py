@@ -11,11 +11,6 @@ from app.jobs.service import append_job, update_job_state
 from app.projects.service import read_project, save_project
 from app.references.files import REFERENCE_ANALYSIS_FILE, REFERENCE_SCRIPT_FILE
 from app.references.openai_clients import AnalysisClient
-from app.production.service import (
-    CONCEPT_KIT_FILENAME,
-    VIDEO_SCENES_FILENAME,
-    generate_concept_kit_and_video_scenes,
-)
 from app.scripts.files import (
     FINAL_SCRIPT_FILE,
     FINAL_SCRIPT_STATE_FILE,
@@ -212,14 +207,8 @@ def create_scripts_router(
             project = read_project(outputs, project_id)
             project.generated_files["final_script"] = FINAL_SCRIPT_FILE
             project.generated_files["final_script_state"] = FINAL_SCRIPT_STATE_FILE
-
-            # Finalize script 시 대본과 함께 각 씬의 이미지 & 비디오 프롬프트 자동 생성!
-            try:
-                generate_concept_kit_and_video_scenes(path, settings)
-                project.generated_files["concept_kit"] = CONCEPT_KIT_FILENAME
-                project.generated_files["video_scenes"] = VIDEO_SCENES_FILENAME
-            except Exception:
-                pass
+            # Scenes are built in the voice/style step, with the style the user picks and the real narration
+            # timing. (Building them here used the default style and silently overrode the user's choice.)
 
             project.current_step = "Production"
             for status in project.step_statuses:

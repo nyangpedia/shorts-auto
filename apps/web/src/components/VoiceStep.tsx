@@ -22,6 +22,7 @@ export function VoiceStep({ audioUrl, durationSeconds, conceptKit, sceneCount, i
     if (conceptKit?.style_id) setStyle(conceptKit.style_id);
   }, [conceptKit?.style_id]);
   useEffect(() => setAudioVersion(Date.now()), [durationSeconds]);
+  const styleChanged = Boolean(conceptKit && conceptKit.style_id && style !== conceptKit.style_id);
 
   return (
     <div className="stack">
@@ -51,9 +52,19 @@ export function VoiceStep({ audioUrl, durationSeconds, conceptKit, sceneCount, i
               <button aria-pressed={style === s.id} key={s.id} onClick={() => setStyle(s.id)} type="button">{s.label}</button>
             ))}
           </div>
-          {conceptKit ? <p className="muted small" style={{ marginTop: 12 }}>현재 씬 {sceneCount}개 · {conceptKit.visual_style}</p> : null}
+          {conceptKit ? (
+            <p className="muted small" style={{ marginTop: 12 }}>
+              지금 적용된 화풍: <b>{VISUAL_STYLES.find((s) => s.id === conceptKit.style_id)?.label ?? conceptKit.style_id}</b> · 씬 {sceneCount}개
+            </p>
+          ) : null}
+          {/* Picking a chip alone changes nothing; say so instead of letting the old style flow into images. */}
+          {styleChanged ? (
+            <div className="banner warn" role="status">
+              &lsquo;{VISUAL_STYLES.find((s) => s.id === style)?.label}&rsquo;은 아직 적용 전입니다. 아래 버튼을 눌러야 씬이 이 화풍으로 바뀝니다.
+            </div>
+          ) : null}
           <div className="row">
-            <button className={conceptKit ? "btn" : "btn accent"} disabled={isBusy || !audioUrl} onClick={() => onBuildScenes(style)} title={!audioUrl ? "음성을 먼저 만들어주세요" : undefined} type="button">
+            <button className={!conceptKit || styleChanged ? "btn accent" : "btn"} disabled={isBusy || !audioUrl} onClick={() => onBuildScenes(style)} title={!audioUrl ? "음성을 먼저 만들어주세요" : undefined} type="button">
               {conceptKit ? "이 화풍으로 씬 다시 구성" : "씬 구성하기"}
             </button>
           </div>
