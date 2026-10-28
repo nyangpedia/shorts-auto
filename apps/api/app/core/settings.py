@@ -66,7 +66,7 @@ class AppSettings(BaseModel):
     @classmethod
     def validate_output_dir(cls, value: str) -> str:
         path = Path(value)
-        if path.is_absolute():
+        if path.anchor:  # is_absolute() misses "/tmp/x" on Windows
             raise ValueError("output_dir must be a relative path")
         if ".." in path.parts:
             raise ValueError("output_dir must not contain path traversal")
