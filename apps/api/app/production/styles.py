@@ -65,6 +65,52 @@ VISUAL_STYLES: dict[str, dict[str, str]] = {
         "lighting": "harsh high-contrast lighting with deep blacks, mysterious shadows",
         "motion": "slow documentary-style push-in",
     },
+    "anime": {
+        "label": "일본 애니",
+        "role": "일본 TV 애니메이션 작화 감독",
+        "style": "Japanese anime cel-shaded illustration, crisp line art, vivid colors, TV animation key frame",
+        "subject": "Depict people as anime characters with large expressive eyes and clear emotional poses",
+        "texture": "clean cel shading with hard shadow edges, painted anime background art",
+        "lighting": "bright saturated lighting with dramatic rim light and sky gradients",
+        "motion": "smooth 2D anime camera pan with parallax layers",
+    },
+    "brick": {
+        "label": "브릭 장난감",
+        "role": "조립 블록 장난감 스톱모션 감독",
+        # Generic plastic building bricks — never a brand name, and no logos on studs.
+        "style": "Plastic interlocking toy building bricks diorama, everything built from glossy bricks, toy photography",
+        "subject": "Depict people as small plastic toy minifigures with simple painted faces and cylindrical heads",
+        "texture": "glossy injection-molded plastic, plain studs without any logo, visible brick seams, macro toy photography",
+        "lighting": "bright playful studio lighting with soft shadows, shallow depth of field",
+        "motion": "smooth stop-motion brick animation",
+    },
+    "pixel": {
+        "label": "레트로 픽셀",
+        "role": "16비트 레트로 게임 픽셀 아티스트",
+        "style": "Retro 16-bit pixel art, limited color palette, side-view game scene",
+        "subject": "Depict people as small chunky pixel-art game sprites with readable silhouettes",
+        "texture": "crisp square pixels, no anti-aliasing, dithered gradients, retro console look",
+        "lighting": "flat game lighting with bold palette contrast",
+        "motion": "smooth side-scrolling camera like a retro game",
+    },
+    "papercraft": {
+        "label": "종이 공예",
+        "role": "레이어드 페이퍼 아트 디오라마 작가",
+        "style": "Layered paper-cut craft diorama, handmade cut paper shapes stacked in depth, papercraft",
+        "subject": "Depict people as simple cut-paper figures with layered paper clothing",
+        "texture": "visible paper fibers, crisp cut edges, layered depth with soft drop shadows between sheets",
+        "lighting": "soft warm lighting casting gentle shadows between paper layers",
+        "motion": "gentle camera drift revealing paper layers with parallax",
+    },
+    "nature_doc": {
+        "label": "다큐 자연 사진",
+        "role": "자연 다큐멘터리 촬영 감독",
+        "style": "Nature documentary photography, natural colors, telephoto wildlife and landscape shot",
+        "subject": "Depict people as real field researchers or explorers shown small within the natural scene",
+        "texture": "photorealistic natural detail, crisp telephoto focus, natural film color",
+        "lighting": "natural daylight or golden hour light, true-to-life atmosphere",
+        "motion": "slow steady documentary camera move",
+    },
 }
 
 DEFAULT_STYLE = "claymation"

@@ -30,7 +30,12 @@ export const VISUAL_STYLES = [
   { id: "webtoon", label: "웹툰풍", blurb: "만화 컷 느낌 · 썰·이야기" },
   { id: "isometric", label: "미니어처", blurb: "작은 모형 세상 · 규모 비교" },
   { id: "watercolor", label: "수채화 애니", blurb: "부드러운 감성 · 명언·힐링" },
-  { id: "vintage", label: "빈티지 사진", blurb: "어두운 옛 사진 · 역사·미스터리" }
+  { id: "vintage", label: "빈티지 사진", blurb: "어두운 옛 사진 · 역사·미스터리" },
+  { id: "anime", label: "일본 애니", blurb: "셀 애니메이션 · 썰·심리" },
+  { id: "brick", label: "브릭 장난감", blurb: "조립 블록 미니어처 · 사건 재현" },
+  { id: "pixel", label: "레트로 픽셀", blurb: "16비트 게임 화면 · 만약에·게임" },
+  { id: "papercraft", label: "종이 공예", blurb: "오린 종이 입체 · 설명·동화" },
+  { id: "nature_doc", label: "다큐 자연 사진", blurb: "자연 다큐 느낌 · 동물·바다·우주" }
 ] as const;
 
 export const modelLabel = (m: ModelChoice) => `${m.name} · ${m.free ? "무료" : "유료"}`;
