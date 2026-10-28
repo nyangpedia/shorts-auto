@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import logging
 import os
 import re
 import subprocess
@@ -25,6 +26,8 @@ from app.production.models import (
     SceneTextBlock,
     VideoSceneItem,
 )
+
+logger = logging.getLogger(__name__)
 
 TTS_AUDIO_FILENAME = "output_1.2x.wav"
 RAW_STT_FILENAME = "raw_stt.json"
@@ -876,23 +879,42 @@ def _make_kenburns_video(scene_id: int, image_path: Path, video_path: Path, dura
     subprocess.run(cmd, capture_output=True, check=True)
 
 
-def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path) -> None:
-    # Workers AI free tier: 10k neurons/day (~200 images). Output is square; ffmpeg crops it to 9:16 later.
-    if not (settings.cloudflare_account_id and settings.cloudflare_api_token):
-        raise RuntimeError("CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN이 없습니다. .env에 넣어주세요.")
+CLOUDFLARE_RETRY_STATUSES = (400, 429, 500, 502, 503, 504)
+
+
+def _post_cloudflare(settings: AppSettings, model: str, **request) -> httpx.Response:
     # Workers AI intermittently returns 400 for a prompt that succeeds on the next try.
     for attempt in range(3):
         resp = httpx.post(
-            f"https://api.cloudflare.com/client/v4/accounts/{settings.cloudflare_account_id}"
-            "/ai/run/@cf/black-forest-labs/flux-1-schnell",
+            f"https://api.cloudflare.com/client/v4/accounts/{settings.cloudflare_account_id}/ai/run/{model}",
             headers={"Authorization": f"Bearer {settings.cloudflare_api_token}"},
-            # Output is square and gets center-cropped to 9:16, so keep the subject in the middle third.
-            json={"prompt": f"{prompt[:1850]}, subject centered in frame, vertical composition, nothing important near left or right edges", "steps": 4},
             timeout=120.0,
+            **request,
         )
-        if resp.status_code not in (400, 429, 500, 502, 503, 504) or attempt == 2:
+        if resp.status_code not in CLOUDFLARE_RETRY_STATUSES or attempt == 2:
             break
         time.sleep(2 * (attempt + 1))
+    return resp
+
+
+def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path) -> None:
+    # Workers AI free tier: 10k neurons/day. FLUX.2 klein takes a size, so scenes come out 9:16 natively;
+    # flux-1-schnell (square only, center-cropped later) is the fallback.
+    if not (settings.cloudflare_account_id and settings.cloudflare_api_token):
+        raise RuntimeError("CLOUDFLARE_ACCOUNT_ID / CLOUDFLARE_API_TOKEN이 없습니다. 설정 화면에서 넣어주세요.")
+    resp = _post_cloudflare(
+        settings,
+        "@cf/black-forest-labs/flux-2-klein-4b",
+        files={"prompt": (None, f"{prompt[:1900]}, vertical composition"), "width": (None, "768"), "height": (None, "1344")},
+    )
+    if resp.status_code != 200 or not resp.json().get("success"):
+        logger.warning("FLUX.2 klein failed (%s); falling back to flux-1-schnell", resp.status_code)
+        resp = _post_cloudflare(
+            settings,
+            "@cf/black-forest-labs/flux-1-schnell",
+            # Square output gets center-cropped to 9:16, so keep the subject in the middle third.
+            json={"prompt": f"{prompt[:1850]}, subject centered in frame, nothing important near left or right edges", "steps": 4},
+        )
     resp.raise_for_status()
     target.write_bytes(base64.b64decode(resp.json()["result"]["image"]))
     usage.record("image")

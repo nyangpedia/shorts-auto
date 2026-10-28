@@ -74,17 +74,41 @@ def test_cloudflare_retries_transient_400(tmp_path, monkeypatch):
     from app.production import service
 
     codes = iter([400, 200])
+    calls = []
 
-    def fake_post(*a, **kw):
+    def fake_post(url, **kw):
+        calls.append((url, kw))
         code = next(codes)
         return SimpleNamespace(status_code=code, raise_for_status=lambda: None,
-                               json=lambda: {"result": {"image": base64.b64encode(b"img").decode()}})
+                               json=lambda: {"success": code == 200, "result": {"image": base64.b64encode(b"img").decode()}})
 
     monkeypatch.setattr(service.httpx, "post", fake_post)
     monkeypatch.setattr(service.time, "sleep", lambda s: None)
     target = tmp_path / "x.png"
     service._generate_cloudflare_image(AppSettings(cloudflare_account_id="a", cloudflare_api_token="t"), "p", target)
     assert target.read_bytes() == b"img"
+    assert all("flux-2-klein" in url for url, _ in calls)  # retried the 9:16 model, no fallback needed
+    assert calls[-1][1]["files"]["height"] == (None, "1344")
+
+
+def test_cloudflare_falls_back_to_square_model(tmp_path, monkeypatch):
+    import base64
+    from app.core.settings import AppSettings
+    from app.production import service
+
+    used = []
+
+    def fake_post(url, **kw):
+        used.append(url.rsplit("/", 1)[-1])
+        ok = "schnell" in url
+        return SimpleNamespace(status_code=200 if ok else 500, raise_for_status=lambda: None,
+                               json=lambda: {"success": ok, "result": {"image": base64.b64encode(b"sq").decode()}})
+
+    monkeypatch.setattr(service.httpx, "post", fake_post)
+    monkeypatch.setattr(service.time, "sleep", lambda s: None)
+    target = tmp_path / "y.png"
+    service._generate_cloudflare_image(AppSettings(cloudflare_account_id="a", cloudflare_api_token="t"), "p", target)
+    assert used == ["flux-2-klein-4b"] * 3 + ["flux-1-schnell"] and target.read_bytes() == b"sq"
 
 
 def test_concept_prompt_uses_selected_style(tmp_path, monkeypatch):
