@@ -1,15 +1,19 @@
+"""Speech-to-text and LLM clients.
+
+Free path: local faster-whisper for speech, Gemini (OpenAI-compatible endpoint) for text, falling
+through several Gemini models because each has its own small daily cap. OpenAI works when keyed.
+"""
 from __future__ import annotations
 
+import json
+import logging
 from functools import lru_cache
 from pathlib import Path
-import json
+from types import SimpleNamespace
 from typing import Protocol
 
-import logging
-from types import SimpleNamespace
-
-from openai import APIConnectionError, APIStatusError, NotFoundError, OpenAI, RateLimitError
 from faster_whisper import WhisperModel
+from openai import APIConnectionError, APIStatusError, NotFoundError, OpenAI, RateLimitError
 
 from app.core import usage
 from app.references.files import write_reference_raw_stt, write_reference_script
@@ -18,11 +22,18 @@ logger = logging.getLogger(__name__)
 
 
 class TranscriptionClient(Protocol):
-    def transcribe(self, audio_path: Path) -> dict:
-        ...
+    def transcribe(self, audio_path: Path) -> dict: ...
 
+
+class AnalysisClient(Protocol):
+    def analyze(self, prompt: str) -> dict: ...
+
+
+# ── speech to text ──────────────────────────────────────────────────────────
 
 class OpenAITranscriptionClient:
+    """Paid Whisper API; returns OpenAI's verbose JSON (text + timed segments)."""
+
     def __init__(self, api_key: str, model: str):
         if not api_key:
             raise ValueError("OpenAI API key is missing")
@@ -30,16 +41,11 @@ class OpenAITranscriptionClient:
         self.model = model
 
     def transcribe(self, audio_path: Path) -> dict:
-        with audio_path.open("rb") as audio_file:
-            result = self.client.audio.transcriptions.create(
-                model=self.model,
-                file=audio_file,
-                response_format="verbose_json",
-                timestamp_granularities=["segment"],
+        with audio_path.open("rb") as audio:
+            reply = self.client.audio.transcriptions.create(
+                model=self.model, file=audio, response_format="verbose_json", timestamp_granularities=["segment"],
             )
-        if hasattr(result, "model_dump"):
-            return result.model_dump()
-        return dict(result)
+        return reply.model_dump() if hasattr(reply, "model_dump") else dict(reply)
 
 
 @lru_cache(maxsize=2)
@@ -48,25 +54,34 @@ def _load_whisper(model: str, device: str) -> WhisperModel:
 
 
 class FasterWhisperClient:
+    """Local Whisper on CPU, in the same shape as the OpenAI reply."""
+
     def __init__(self, model: str = "base", device: str = "cpu", language: str | None = None):
         # None = auto-detect (references can be foreign); our own narration passes "ko".
         self.whisper_model = _load_whisper(model, device)
         self.language = language
 
     def transcribe(self, audio_path: Path) -> dict:
-        segments, info = self.whisper_model.transcribe(str(audio_path), language=self.language)
-        segments_list = [
-            {"id": i, "start": s.start, "end": s.end, "text": s.text}
-            for i, s in enumerate(segments)
-        ]
+        found, info = self.whisper_model.transcribe(str(audio_path), language=self.language)
+        segments = [{"id": n, "start": s.start, "end": s.end, "text": s.text} for n, s in enumerate(found)]
         return {
             "task": "transcribe",
             "language": info.language,
             "duration": info.duration,
-            "text": " ".join(seg["text"].strip() for seg in segments_list),
-            "segments": segments_list,
+            "text": " ".join(s["text"].strip() for s in segments),
+            "segments": segments,
         }
 
+
+def write_reference_stt_outputs(project_dir: Path, raw_stt: dict) -> str:
+    """Save the raw recognition result and its plain text as the reference script."""
+    text = str(raw_stt.get("text", "")).strip()
+    write_reference_raw_stt(project_dir, raw_stt)
+    write_reference_script(project_dir, text + "\n")
+    return text
+
+
+# ── text generation ─────────────────────────────────────────────────────────
 
 class FallbackLLM:
     """OpenAI-compatible chat client that moves to the next model when one fails.
@@ -75,7 +90,7 @@ class FallbackLLM:
     a list of models multiplies the daily budget.
     """
 
-    _RETRYABLE = (RateLimitError, NotFoundError, APIConnectionError)
+    _TRY_NEXT = (RateLimitError, NotFoundError, APIConnectionError)
 
     def __init__(self, api_key: str, base_url: str = "", fallbacks: list[str] | None = None):
         # max_retries=0: on a quota 429 the SDK would otherwise sleep and retry the same model.
@@ -84,33 +99,31 @@ class FallbackLLM:
         self.chat = SimpleNamespace(completions=SimpleNamespace(create=self._create))
 
     def _create(self, *, model: str, **kwargs):
-        models = [model] + [m for m in self._fallbacks if m != model]
-        for i, name in enumerate(models):
+        chain = [model, *(m for m in self._fallbacks if m != model)]
+        for position, name in enumerate(chain):
+            last = position == len(chain) - 1
             try:
-                response = self._client.chat.completions.create(model=name, **kwargs)
-                usage.record("llm")
-                return response
+                reply = self._client.chat.completions.create(model=name, **kwargs)
             except APIStatusError as exc:
-                retryable = isinstance(exc, self._RETRYABLE) or exc.status_code >= 500
-                if not retryable or i == len(models) - 1:
-                    raise
-                logger.warning("LLM %s failed (%s); falling back to %s", name, exc.status_code, models[i + 1])
+                if last or not (isinstance(exc, self._TRY_NEXT) or exc.status_code >= 500):
+                    raise  # a bad request fails the same way on every model
+                logger.warning("LLM %s failed (%s); falling back to %s", name, exc.status_code, chain[position + 1])
             except APIConnectionError as exc:
-                if i == len(models) - 1:
+                if last:
                     raise
-                logger.warning("LLM %s failed (%s); falling back to %s", name, type(exc).__name__, models[i + 1])
+                logger.warning("LLM %s failed (%s); falling back to %s", name, type(exc).__name__, chain[position + 1])
+            else:
+                usage.record("llm")
+                return reply
 
 
 def make_llm_client(settings) -> FallbackLLM:
     return FallbackLLM(settings.llm_api_key, settings.llm_base_url, settings.llm_fallback_list)
 
 
-class AnalysisClient(Protocol):
-    def analyze(self, prompt: str) -> dict:
-        ...
-
-
 class OpenAIAnalysisClient:
+    """Sends one prompt, returns the reply parsed as JSON."""
+
     def __init__(self, api_key: str, model: str, base_url: str = "", fallbacks: list[str] | None = None):
         if not api_key:
             raise ValueError("LLM API key is missing")
@@ -120,20 +133,9 @@ class OpenAIAnalysisClient:
 
     def analyze(self, prompt: str) -> dict:
         # JSON mode is OpenAI-only; other OpenAI-compatible providers get fence stripping instead.
-        extra = {} if self.base_url else {"response_format": {"type": "json_object"}}
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            **extra,
-        )
-        content = response.choices[0].message.content.strip()
-        if content.startswith("```"):
-            content = content.split("\n", 1)[1].rsplit("```", 1)[0]
-        return json.loads(content)
-
-
-def write_reference_stt_outputs(project_dir: Path, raw_stt: dict) -> str:
-    text = str(raw_stt.get("text", "")).strip()
-    write_reference_raw_stt(project_dir, raw_stt)
-    write_reference_script(project_dir, f"{text}\n")
-    return text
+        json_mode = {} if self.base_url else {"response_format": {"type": "json_object"}}
+        reply = self.client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": prompt}], **json_mode)
+        text = reply.choices[0].message.content.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[1].rsplit("```", 1)[0]
+        return json.loads(text)

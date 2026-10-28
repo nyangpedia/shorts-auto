@@ -79,7 +79,7 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 진행 상황 확인: `git blame --line-porcelain <file> | grep -c "^author gwnam1"` (원작자 줄 수)
 - [x] 1단계 제작 파이프라인 (`app/production/`: paths, media, voice, scenes, images, motion, revise, state, numbers). DALL·E 3 → `gpt-image-2.5-flare`. Qwen TTS 제거.
 - [x] 2단계 대본·분석 프롬프트 (`scripts/generation.py`, `references/analysis.py`) — A/B 완료: 새 쪽이 분량·정확성 기준을 더 잘 지킴
-- [ ] 3단계 레퍼런스 (`references/router.py`, `youtube.py`, `files.py`, `audio.py`, `models.py`)
+- [x] 3단계 레퍼런스 (`references/router.py`, `youtube.py`, `files.py`, `audio.py`, `models.py`)
 - [ ] 4단계 렌더러·제작 라우터·작업 기록·프로젝트·설정 (`production/renderer.py`, `production/router.py`, `production/models.py`, `jobs/*`, `projects/service.py`, `core/settings.py`, `main.py`)
 - [ ] 5단계 웹 `api.ts`, `types.ts`, 원작자 테스트
 - [ ] 6단계 `tools/higgsfield-mcp` (기능 유지, 코드 재작성)

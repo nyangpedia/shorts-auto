@@ -1,45 +1,29 @@
+"""Reference search requests and the videos they return. Field names are the stored project format."""
 from __future__ import annotations
 
 from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, computed_field, field_validator, model_validator
 
-
 SourceType = Literal["search", "direct"]
-DurationFilter = Literal[
-    "under_60",
-    "under_120",
-    "under_180",
-    "under_300",
-    "over_300",
-    "all",
-]
-DURATION_FILTER_MAX_SECONDS: dict[DurationFilter, Optional[int]] = {
-    "under_60": 60,
-    "under_120": 120,
-    "under_180": 180,
-    "under_300": 300,
-    "over_300": None,
-    "all": None,
+DurationFilter = Literal["under_60", "under_120", "under_180", "under_300", "over_300", "all"]
+# Upper bound in seconds per duration filter (None = no upper bound).
+DURATION_FILTER_MAX_SECONDS: dict[str, Optional[int]] = {
+    "under_60": 60, "under_120": 120, "under_180": 180, "under_300": 300, "over_300": None, "all": None,
 }
 TEXT_FIELD_LENGTHS = {
-    "video_id": 32,
-    "url": 500,
-    "title": 500,
-    "channel_id": 120,
-    "channel_name": 200,
-    "thumbnail_url": 1000,
-    "upload_date": 80,
+    "video_id": 32, "url": 500, "title": 500, "channel_id": 120,
+    "channel_name": 200, "thumbnail_url": 1000, "upload_date": 80,
 }
 
 
-def _bounded_non_empty(value: str, field_name: str, max_length: int) -> str:
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError(f"{field_name} must not be empty")
-    if len(stripped) > max_length:
-        raise ValueError(f"{field_name} must be at most {max_length} characters")
-    return stripped
+def _required(value: str, name: str, limit: int) -> str:
+    text = value.strip()
+    if not text:
+        raise ValueError(f"{name} must not be empty")
+    if len(text) > limit:
+        raise ValueError(f"{name} must be at most {limit} characters")
+    return text
 
 
 class ReferenceSearchRequest(BaseModel):
@@ -54,13 +38,11 @@ class ReferenceSearchRequest(BaseModel):
     max_results: int = Field(default=25, ge=1, le=50)
 
     @model_validator(mode="after")
-    def validate_keyword_or_channel(self) -> ReferenceSearchRequest:
-        kw = (self.keyword or "").strip()
-        cq = (self.channel_query or "").strip()
-        if not kw and not cq:
+    def _needs_keyword_or_channel(self) -> "ReferenceSearchRequest":
+        self.keyword = (self.keyword or "").strip()
+        self.channel_query = (self.channel_query or "").strip() or None
+        if not self.keyword and not self.channel_query:
             raise ValueError("Either keyword or channel_query must be provided and non-empty")
-        self.keyword = kw
-        self.channel_query = cq if cq else None
         return self
 
     @computed_field
@@ -68,13 +50,12 @@ class ReferenceSearchRequest(BaseModel):
     def effective_max_duration_seconds(self) -> Optional[int]:
         return DURATION_FILTER_MAX_SECONDS[self.duration_filter]
 
-    def matches_duration(self, duration_seconds: int) -> bool:
-        if self.duration_filter == "over_300":
-            return duration_seconds > 300
+    def matches_duration(self, seconds: int) -> bool:
         if self.duration_filter == "all":
             return True
-        max_seconds = self.effective_max_duration_seconds
-        return max_seconds is not None and duration_seconds <= max_seconds
+        if self.duration_filter == "over_300":
+            return seconds > 300
+        return seconds <= DURATION_FILTER_MAX_SECONDS[self.duration_filter]
 
 
 class DirectReferenceRequest(BaseModel):
@@ -82,8 +63,8 @@ class DirectReferenceRequest(BaseModel):
 
     @field_validator("url")
     @classmethod
-    def clean_url(cls, value: str) -> str:
-        return _bounded_non_empty(value, "url", 500)
+    def _clean(cls, value: str) -> str:
+        return _required(value, "url", 500)
 
 
 class SelectReferenceRequest(BaseModel):
@@ -91,8 +72,8 @@ class SelectReferenceRequest(BaseModel):
 
     @field_validator("video_id")
     @classmethod
-    def clean_video_id(cls, value: str) -> str:
-        return _bounded_non_empty(value, "video_id", 32)
+    def _clean(cls, value: str) -> str:
+        return _required(value, "video_id", 32)
 
 
 class ReferenceCandidate(BaseModel):
@@ -109,23 +90,16 @@ class ReferenceCandidate(BaseModel):
     source_type: SourceType
     title_ko: Optional[str] = None  # Korean gloss of a foreign title, filled after search
 
-    @field_validator(
-        "video_id",
-        "url",
-        "title",
-        "channel_id",
-        "channel_name",
-        "thumbnail_url",
-        "upload_date",
-    )
+    @field_validator(*TEXT_FIELD_LENGTHS)
     @classmethod
-    def clean_required_text(cls, value: str, info) -> str:
-        return _bounded_non_empty(value, info.field_name, TEXT_FIELD_LENGTHS[info.field_name])
+    def _clean_text(cls, value: str, info) -> str:
+        return _required(value, info.field_name, TEXT_FIELD_LENGTHS[info.field_name])
 
     @computed_field
     @property
     def vs_ratio(self) -> Optional[float]:
-        if self.subscriber_count is None or self.subscriber_count <= 0:
+        """Views per subscriber — how far the video travelled beyond the channel's own audience."""
+        if not self.subscriber_count:
             return None
         return round(self.view_count / self.subscriber_count, 4)
 

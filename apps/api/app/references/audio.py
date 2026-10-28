@@ -1,3 +1,4 @@
+"""Getting the reference's sound: download it with yt-dlp, or accept a file the user uploads."""
 from __future__ import annotations
 
 import os
@@ -5,7 +6,6 @@ import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any, Callable
-
 
 ALLOWED_AUDIO_EXTENSIONS = {".wav", ".mp3", ".m4a", ".aac", ".webm"}
 MAX_AUDIO_UPLOAD_BYTES = 200 * 1024 * 1024
@@ -17,50 +17,38 @@ class AudioExtractionError(RuntimeError):
 
 
 def validate_audio_upload_name(filename: str) -> str:
-    suffix = Path(filename).suffix.lower()
-    if suffix not in ALLOWED_AUDIO_EXTENSIONS:
+    """The stored name for an upload ("reference_audio.mp3"), or ValueError for an unsupported type."""
+    ext = Path(filename).suffix.lower()
+    if ext not in ALLOWED_AUDIO_EXTENSIONS:
         raise ValueError("Audio upload must be wav, mp3, m4a, aac, or webm")
-    return f"reference_audio{suffix}"
+    return f"reference_audio{ext}"
 
 
 def default_runner(command: list[str]) -> tuple[int, str, str]:
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
-    return completed.returncode, completed.stdout, completed.stderr
+    done = subprocess.run(command, capture_output=True, text=True, check=False)
+    return done.returncode, done.stdout, done.stderr
 
 
-async def save_uploaded_audio(
-    file: Any,
-    output_path: Path,
-    max_bytes: int = MAX_AUDIO_UPLOAD_BYTES,
-) -> Path:
-    temp_path = None
-    total_bytes = 0
+async def save_uploaded_audio(file: Any, output_path: Path, max_bytes: int = MAX_AUDIO_UPLOAD_BYTES) -> Path:
+    """Stream an upload to disk in chunks, refusing empty or oversized files without leaving partial ones."""
+    fd, temp_name = tempfile.mkstemp(dir=output_path.parent, prefix=f".{output_path.name}.", suffix=".tmp")
+    written = 0
     try:
-        with tempfile.NamedTemporaryFile(
-            "wb",
-            dir=output_path.parent,
-            prefix=f".{output_path.name}.",
-            suffix=".tmp",
-            delete=False,
-        ) as temp_file:
-            temp_path = Path(temp_file.name)
-            while True:
-                chunk = await file.read(UPLOAD_CHUNK_SIZE)
-                if not chunk:
-                    break
-                total_bytes += len(chunk)
-                if total_bytes > max_bytes:
+        with os.fdopen(fd, "wb") as handle:
+            while chunk := await file.read(UPLOAD_CHUNK_SIZE):
+                written += len(chunk)
+                if written > max_bytes:
                     raise ValueError("Audio upload is too large")
-                temp_file.write(chunk)
-            temp_file.flush()
-            os.fsync(temp_file.fileno())
-        if total_bytes == 0:
+                handle.write(chunk)
+            handle.flush()
+            os.fsync(handle.fileno())
+        if written == 0:
             raise ValueError("Audio upload must not be empty")
-        temp_path.replace(output_path)
+        os.replace(temp_name, output_path)
         return output_path
     finally:
-        if temp_path is not None and temp_path.exists():
-            temp_path.unlink()
+        if os.path.exists(temp_name):
+            os.unlink(temp_name)
 
 
 def extract_reference_audio(
@@ -69,24 +57,16 @@ def extract_reference_audio(
     yt_dlp_binary: str,
     runner: Callable[[list[str]], tuple[int, str, str]] = default_runner,
 ) -> Path:
-    output_template = str(project_dir / "reference_audio.%(ext)s")
-    command = [
-        yt_dlp_binary,
-        "--extract-audio",
-        "--audio-format",
-        "wav",
-        "--output",
-        output_template,
-        url,
-    ]
+    """Download the video's audio track as reference_audio.wav."""
+    target = project_dir / "reference_audio.wav"
+    command = [yt_dlp_binary, "--extract-audio", "--audio-format", "wav",
+               "--output", str(project_dir / "reference_audio.%(ext)s"), url]
     try:
-        returncode, stdout, stderr = runner(command)
+        code, out, err = runner(command)
     except FileNotFoundError as exc:
         raise AudioExtractionError(f"yt-dlp binary not found: {yt_dlp_binary}") from exc
-    if returncode != 0:
-        message = stderr.strip() or stdout.strip() or "yt-dlp failed"
-        raise AudioExtractionError(message)
-    output_path = project_dir / "reference_audio.wav"
-    if not output_path.exists():
+    if code != 0:
+        raise AudioExtractionError(err.strip() or out.strip() or "yt-dlp failed")
+    if not target.exists():
         raise AudioExtractionError("yt-dlp completed but reference_audio.wav was not created")
-    return output_path
+    return target
