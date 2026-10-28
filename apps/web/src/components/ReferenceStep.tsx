@@ -32,6 +32,8 @@ const GENRES = [
   { label: "심리", keyword: "심리학 행동 특징, 연애 심리, psychology facts, dating psychology, 心理学, 恋愛 心理" },
   { label: "역사", keyword: "역사 이야기, 세계사 상식, history facts, history explained, 歴史 雑学, 世界史" },
   { label: "과학", keyword: "신기한 과학, 우주 상식, science facts, space facts, 科学 雑学, 宇宙 雑学" },
+  // Bare "만약에"/"what if" pull a song and Marvel's What If...?; sentence-shaped phrases stay on topic.
+  { label: "만약에", keyword: "만약 지구에서 사라진다면, 갑자기 사라진다면 일어나는 일, what would happen if, what if earth, もしも 地球, もし 消えたら" },
   { label: "미스터리", keyword: "미스터리 괴담, 미제 사건, unsolved mystery, creepy facts, 都市伝説, 未解決事件" }
 ] as const;
 
