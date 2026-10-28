@@ -461,18 +461,23 @@ export default function App() {
         <button aria-current={view === "topics" ? "page" : undefined} className="proj rail-link" onClick={() => setView("topics")} type="button">
           <span aria-hidden="true">🗂</span><span><b>주제 창고</b><small>남은 주제 {topics.filter((t) => !t.used_by).length}개</small></span>
         </button>
-        <div className="rail-section">
-          <span aria-hidden="true">🎬</span><b>진행 중인 프로젝트</b><small>{activeProjects.length}</small>
-        </div>
         <div className="proj-list">
-          {projects.length === 0 && !isLoading ? <p className="rail-empty">아직 프로젝트가 없습니다.</p> : null}
-          {activeProjects.map(railProject)}
+          {/* Both groups are collapsible sections; their projects hang off a guide line underneath. */}
+          <details className="rail-group" open>
+            <summary className="rail-section">
+              <span aria-hidden="true">🎬</span><b>진행 중인 프로젝트</b><small>{activeProjects.length}</small>
+            </summary>
+            <div className="rail-children">
+              {activeProjects.length === 0 && !isLoading ? <p className="rail-empty">진행 중인 프로젝트가 없습니다.</p> : null}
+              {activeProjects.map(railProject)}
+            </div>
+          </details>
           {doneProjects.length > 0 ? (
-            <details className="done-box">
+            <details className="rail-group">
               <summary className="rail-section">
                 <span aria-hidden="true">🗄</span><b>완료·보관함</b><small>{doneProjects.length}</small>
               </summary>
-              {doneProjects.map(railProject)}
+              <div className="rail-children">{doneProjects.map(railProject)}</div>
             </details>
           ) : null}
         </div>

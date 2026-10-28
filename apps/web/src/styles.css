@@ -49,16 +49,20 @@ img { display: block; max-width: 100%; }
 .new-project { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 11px; font-weight: 700; }
 .rail-label { margin: 8px 6px 0; font-size: 11px; color: #8d8d97; font-weight: 700; letter-spacing: 0.06em; }
 .proj-list { display: grid; gap: 4px; }
-.done-box { margin-top: 8px; }
-.done-box > summary { cursor: pointer; list-style: none; }
-.done-box > summary::-webkit-details-marker { display: none; }
-.done-box > summary::after { content: "▸"; margin-left: auto; color: #8d8d97; transition: transform 0.15s; }
-.done-box[open] > summary::after { transform: rotate(90deg); }
-.rail-section { display: flex; align-items: center; gap: 10px; margin-top: 6px; padding: 8px; border-radius: 10px; font-size: 13.5px; }
+.rail-group { margin-top: 4px; }
+.rail-section { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 10px; font-size: 13.5px; color: var(--rail-ink); }
 .rail-section > span { width: 34px; text-align: center; font-size: 18px; }
 .rail-section small { padding: 1px 7px; border-radius: 999px; background: var(--rail-2); color: #9a9aa4; font-size: 11px; font-weight: 700; }
 summary.rail-section:hover { background: var(--rail-2); }
-.done-box[open] { display: grid; gap: 4px; }
+.rail-group > summary { cursor: pointer; list-style: none; }
+.rail-group > summary::-webkit-details-marker { display: none; }
+.rail-group > summary::after { content: "▸"; margin-left: auto; color: #8d8d97; transition: transform 0.15s; }
+.rail-group[open] > summary::after { transform: rotate(90deg); }
+/* children hang off a guide line aligned under the section icon */
+.rail-children { display: grid; gap: 2px; margin: 2px 0 6px 24px; padding-left: 8px; border-left: 1px solid var(--rail-line); }
+.rail-children .proj { grid-template-columns: 28px minmax(0, 1fr); padding: 6px 8px; }
+.rail-children .proj-thumb { width: 28px; height: 42px; }
+.rail-children .proj-thumb::before { font-size: 14px; }
 .proj { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 10px; align-items: center; padding: 8px; border-radius: 10px; color: inherit; background: none; border: 0; text-align: left; }
 .proj:hover { background: var(--rail-2); }
 .proj[aria-current="page"] { background: var(--rail-2); box-shadow: inset 0 0 0 1px var(--rail-line); }
