@@ -44,7 +44,7 @@ img { display: block; max-width: 100%; }
 .app { display: grid; grid-template-columns: var(--rail-width) minmax(0, 1fr); height: 100vh; }
 .rail { background: var(--rail); color: var(--rail-ink); display: flex; flex-direction: column; gap: 12px; padding: 18px 14px; overflow-y: auto; }
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 800; font-size: 17px; padding: 4px 6px 8px; background: none; border: 0; color: inherit; cursor: pointer; text-align: left; font-family: inherit; }
-.brand-mark { width: 26px; height: 26px; border-radius: 8px; background: var(--accent); display: grid; place-items: center; font-size: 13px; color: #fff; }
+.brand-mark { width: 34px; height: 34px; flex: none; }
 .brand small { display: block; font-size: 11px; font-weight: 500; color: #8d8d97; }
 .new-project { background: var(--accent); color: #fff; border: 0; border-radius: 10px; padding: 11px; font-weight: 700; }
 .rail-label { margin: 8px 6px 0; font-size: 11px; color: #8d8d97; font-weight: 700; letter-spacing: 0.06em; }

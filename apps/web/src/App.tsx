@@ -451,7 +451,7 @@ export default function App() {
     <div className="app">
       <aside className="rail" aria-label="프로젝트">
         <button aria-current={view === "home" ? "page" : undefined} className="brand" onClick={() => setView("home")} type="button">
-          <span aria-hidden="true" className="brand-mark">▶</span>
+          <img alt="" className="brand-mark" src="/logo.svg" />
           <span>{APP_NAME}<small>쇼츠 제작 도구</small></span>
         </button>
         <button aria-current={view === "find" ? "page" : undefined} className="new-project" onClick={startNewProject} type="button">+ 새 프로젝트</button>
