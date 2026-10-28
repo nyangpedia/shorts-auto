@@ -213,6 +213,11 @@ def create_production_router(
             update_job_state(outputs, project_id, job.job_id, "running", "Designing concept kit and continuity video scenes")
 
             generate_concept_kit_and_video_scenes(path, settings, style)
+            # New scenes make the old images/videos stale (other style, other scene count). Left in place they
+            # counted as "done" and mixed styles in the final video, so they go once the new scenes exist.
+            for pattern in ("scene_*_start.png", "scene_*_end.png", "scene_*_final.png", "scene_*_video.mp4"):
+                for stale in (path / SCENES_DIR_NAME).glob(pattern):
+                    stale.unlink(missing_ok=True)
 
             project = read_project(outputs, project_id)
             project.generated_files["concept_kit"] = CONCEPT_KIT_FILENAME
