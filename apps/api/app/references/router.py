@@ -49,14 +49,15 @@ logger = logging.getLogger(__name__)
 SCRIPT_GENERATED_FILE_KEYS = SCRIPT_FILE_KEYS  # older name, imported elsewhere
 SEARCH_CACHE_FILE = "_search_cache.json"
 _HANGUL = re.compile(r"[가-힣]")
-TRANSLATE_TIMEOUT = 45  # seconds
+TRANSLATE_TIMEOUT = 60  # seconds
+TRANSLATE_LIMIT = 60  # the top of the list (sorted by views/subscriber) is what gets looked at; more makes one call too slow
 AFTER_STT = WORKFLOW_STEPS[2:]  # Analysis … Render
 AFTER_ANALYSIS = ("Candidates", "Script", "Production", "Render")
 
 
 def add_korean_titles(candidates: list[ReferenceCandidate], make_client: Callable[[], AnalysisClient]) -> list[ReferenceCandidate]:
     """One LLM call glosses every non-Korean title; search still succeeds if it fails."""
-    foreign = [c for c in candidates if not _HANGUL.search(c.title)]
+    foreign = [c for c in candidates if not _HANGUL.search(c.title)][:TRANSLATE_LIMIT]
     if not foreign:
         return candidates
     lines = "\n".join(f"{i}. {c.title}" for i, c in enumerate(foreign))
