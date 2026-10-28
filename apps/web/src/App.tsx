@@ -45,6 +45,7 @@ import { AnalysisStep } from "./components/AnalysisStep";
 import { DailyView } from "./components/DailyView";
 import { TopicsView } from "./components/TopicsView";
 import { FinalStep } from "./components/FinalStep";
+import { HomeView } from "./components/HomeView";
 import { ReferenceStep } from "./components/ReferenceStep";
 import { ScenesStep } from "./components/ScenesStep";
 import { ScriptStep } from "./components/ScriptStep";
@@ -80,9 +81,11 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(true);
   const [titleDraft, setTitleDraft] = useState<string | null>(null);
   const [usageToday, setUsageToday] = useState<UsageToday | null>(null);
-  const [view, setView] = useState<"project" | "topics" | "daily">(() => {
-    const asked = new URLSearchParams(window.location.search).get("view");
-    return asked === "topics" || asked === "daily" ? asked : "project";
+  const [view, setView] = useState<"home" | "project" | "topics" | "daily">(() => {
+    const params = new URLSearchParams(window.location.search);
+    const asked = params.get("view");
+    if (asked === "topics" || asked === "daily") return asked;
+    return params.get("project") ? "project" : "home";
   });
   const [topics, setTopics] = useState<readonly TopicItem[]>([]);
   const [hiddenTopics, setHiddenTopics] = useState<readonly TopicItem[]>([]);
@@ -398,10 +401,10 @@ export default function App() {
   return (
     <div className="app">
       <aside className="rail" aria-label="프로젝트">
-        <div className="brand">
+        <button aria-current={view === "home" ? "page" : undefined} className="brand" onClick={() => setView("home")} type="button">
           <span aria-hidden="true" className="brand-mark">▶</span>
           <span>{APP_NAME}<small>쇼츠 제작 도구</small></span>
-        </div>
+        </button>
         <button className="new-project" onClick={() => { setView("project"); void handleCreateProject(); }} type="button">+ 새 프로젝트</button>
         <button aria-current={view === "daily" ? "page" : undefined} className="proj rail-link" onClick={() => setView("daily")} type="button">
           <span aria-hidden="true">📌</span><span><b>오늘의 레퍼런스</b></span>
@@ -467,7 +470,16 @@ export default function App() {
             {error ? (
               <div className="banner bad" role="alert">⚠️ {error} <button className="link-btn" onClick={() => setError(null)} type="button">닫기</button></div>
             ) : null}
-            {view === "topics" ? (
+            {view === "home" ? (
+              <HomeView
+                onGo={setView}
+                onNew={() => { setView("project"); void handleCreateProject(); }}
+                onOpen={handleSelectProject}
+                projects={projects}
+                stepLabel={(p) => (p.generated_files.final_video ? "완성" : STEP_KO[p.current_step] ?? p.current_step)}
+                topicsLeft={topics.filter((t) => !t.used_by).length}
+              />
+            ) : view === "topics" ? (
               <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} hidden={hiddenTopics} onHide={(ids) => void handleHideTopics(ids)} onRestore={(ids) => void handleHideTopics(ids, true)} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
             ) : (
               <DailyView

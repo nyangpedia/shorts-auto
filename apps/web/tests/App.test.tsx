@@ -33,6 +33,7 @@ const mocked = vi.mocked(api);
 describe("App", () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    window.history.replaceState(null, "", `/?project=${project.project_id}`);
     mocked.fetchProjects.mockResolvedValue([project]);
     mocked.fetchReferenceState.mockResolvedValue(emptyReference);
     mocked.fetchScriptsState.mockResolvedValue(emptyScripts);
@@ -41,6 +42,17 @@ describe("App", () => {
     mocked.fetchUsage.mockResolvedValue({ llm: 3, llm_limit: 100, image: 0, image_limit: 200, tts: 1 });
     mocked.fetchTopics.mockResolvedValue({ topics: [] });
     mocked.fetchDaily.mockResolvedValue({ keywords: [], fetched_on: null, items: [] });
+  });
+
+  it("opens on the home screen and continues a project from it", async () => {
+    const user = userEvent.setup();
+    window.history.replaceState(null, "", "/");
+    render(<App />);
+
+    expect(await screen.findByRole("heading", { name: "이어서 만들기" })).toBeInTheDocument();
+    const [, fromHome] = screen.getAllByRole("button", { name: /261011_untitled/ }); // rail entry, then the home card
+    await user.click(fromHome);
+    expect(await screen.findByRole("heading", { name: "제목 없음" })).toBeInTheDocument();
   });
 
   it("starts a saved topic as a new project and writes drafts for it", async () => {
