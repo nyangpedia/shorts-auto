@@ -27,11 +27,9 @@ interface SubtitlesProps {
 // caption/channel overlay (bottom ~25%), and narrow enough to stay clear of the right-side buttons.
 const LINE_CENTER_FROM_BOTTOM = 620;
 const MAX_WIDTH = 820;
-
-// Approximate Pretendard Black advance widths (in em, after the -2px tracking): Hangul is nearly
-// square, Latin/digits about half, spaces narrow.
-const lineWidthEm = (text: string): number =>
-  [...text].reduce((sum, ch) => sum + (/[가-힣]/.test(ch) ? 0.92 : ch === " " ? 0.26 : 0.6), 0);
+// One size for every line. The API cuts chunks so each fits on one line at this size
+// (SUBTITLE_FONT_PX / LINE_WIDTH_PX in apps/api/app/production/word_timing.py — keep in sync).
+const FONT_SIZE = 84;
 
 export const Subtitles: React.FC<SubtitlesProps> = ({ subtitles }) => {
   const frame = useCurrentFrame();
@@ -47,8 +45,6 @@ export const Subtitles: React.FC<SubtitlesProps> = ({ subtitles }) => {
   const relativeFrame = Math.max(0, frame - Math.round(current.start * fps));
   const scale = 0.85 + 0.15 * spring({ frame: relativeFrame, fps, config: { damping: 14, stiffness: 220, mass: 0.8 } });
   const opacity = interpolate(relativeFrame, [0, 3], [0, 1], { extrapolateRight: "clamp" });
-  // Always one line: size the font so the line just fits instead of wrapping.
-  const fontSize = Math.round(Math.min(104, MAX_WIDTH / lineWidthEm(current.text)));
 
   // The spoken word stays lit through a pause until the next word starts.
   const words = current.words;
@@ -72,7 +68,7 @@ export const Subtitles: React.FC<SubtitlesProps> = ({ subtitles }) => {
         position: "absolute",
         left: 0,
         right: 0,
-        bottom: LINE_CENTER_FROM_BOTTOM - fontSize * 0.6,
+        bottom: LINE_CENTER_FROM_BOTTOM - FONT_SIZE * 0.6,
         display: "flex",
         justifyContent: "center",
         pointerEvents: "none",
@@ -86,9 +82,10 @@ export const Subtitles: React.FC<SubtitlesProps> = ({ subtitles }) => {
           opacity,
           maxWidth: MAX_WIDTH,
           textAlign: "center",
-          whiteSpace: "nowrap",
+          // Chunks are cut to fit; an older, longer chunk wraps to a second line rather than shrinking.
+          wordBreak: "keep-all",
           fontFamily: SHORTS_FONT,
-          fontSize,
+          fontSize: FONT_SIZE,
           fontWeight: 900,
           lineHeight: 1.2,
           letterSpacing: "-2px",

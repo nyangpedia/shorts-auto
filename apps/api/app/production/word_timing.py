@@ -11,10 +11,22 @@ import re
 from pathlib import Path
 
 WORDS_CACHE_FILE = "subtitle_words.json"
-MAX_LINE_CHARS = 12  # one line at subtitle size (~820px wide)
+# Subtitles use one fixed size; a chunk is cut so that it fits on one line at that size.
+# Keep in sync with SUBTITLE_FONT_PX / MAX_WIDTH and lineWidthEm in apps/remotion/src/Subtitles.tsx.
+SUBTITLE_FONT_PX = 84
+LINE_WIDTH_PX = 820
 PAUSE_SPLIT = 0.35  # a breath longer than this starts a new chunk
 LINE_END = tuple(".?!,~…")
 NUMBER_END = re.compile(r"[\d만억조천백]$")  # "230만" + "개의": never split a number from its unit
+
+
+def line_width_em(text: str) -> float:
+    """Approximate Pretendard Black advance widths: Hangul ≈ square, Latin/digits ≈ half, spaces narrow."""
+    return sum(0.92 if "가" <= ch <= "힣" else 0.26 if ch == " " else 0.6 for ch in text)
+
+
+def fits_one_line(text: str) -> bool:
+    return line_width_em(text) * SUBTITLE_FONT_PX <= LINE_WIDTH_PX
 
 
 def transcribe_words(audio_path: Path, model: str, device: str) -> list[dict]:
@@ -75,16 +87,22 @@ def assign_word_times(blocks: list[dict], spoken: list[dict]) -> list[dict]:
     return out
 
 
-def one_line_chunks(words: list[dict], max_chars: int = MAX_LINE_CHARS) -> list[dict]:
+def one_line_chunks(words: list[dict]) -> list[dict]:
     """Group timed words into one-line subtitles; each keeps its words so the spoken one can be highlighted."""
     groups: list[list[dict]] = []
     for w in words:
         cur = groups[-1] if groups else None
+        fits = cur is not None and fits_one_line(" ".join(x["text"] for x in cur + [w]))
         if cur is not None and NUMBER_END.search(cur[-1]["text"]):
-            cur.append(w)  # may run a few characters long; the renderer shrinks the font to keep one line
+            if fits:
+                cur.append(w)  # keep a number with its unit
+            elif len(cur) > 1:
+                groups.append([cur.pop(), w])  # no room: break before the number instead of after it
+            else:
+                groups.append([w])
         elif (
             cur is None
-            or len(" ".join(x["text"] for x in cur + [w])) > max_chars
+            or not fits
             or cur[-1]["text"].endswith(LINE_END)
             or w["start"] - cur[-1]["end"] > PAUSE_SPLIT
         ):
@@ -110,8 +128,10 @@ if __name__ == "__main__":
     timed = assign_word_times(blocks, heard)
     assert [w["text"] for w in timed][:2] == ["그런데", "심리학"] and timed[1]["start"] == 0.5
     lines = one_line_chunks(timed)
-    assert all(len(c["text"]) <= MAX_LINE_CHARS or len(c["words"]) == 1 for c in lines)
+    assert all(fits_one_line(c["text"]) or len(c["words"]) == 1 for c in lines)
     assert lines[-1]["text"] == "첫째" and lines[-2]["text"].endswith("반전!")
-    nums = one_line_chunks([{"text": t, "start": k, "end": k + 0.9} for k, t in enumerate("피라미드가 230만 개의 돌을".split())])
-    assert [c["text"] for c in nums] == ["피라미드가 230만 개의", "돌을"]
+    text = "거대한 이집트 피라미드가 무려 230만 개의 돌로 만들어졌고 총무게는 600만 톤입니다"
+    nums = one_line_chunks([{"text": t, "start": k, "end": k + 0.9} for k, t in enumerate(text.split())])
+    assert " ".join(c["text"] for c in nums) == text and all(fits_one_line(c["text"]) for c in nums)
+    assert not any(NUMBER_END.search(c["text"]) for c in nums[:-1])  # no line ends on a bare number
     print("ok", [c["text"] for c in lines])

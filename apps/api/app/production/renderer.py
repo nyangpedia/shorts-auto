@@ -378,7 +378,7 @@ def render_final_shorts(
         subtitles_list = one_line_chunks(assign_word_times(raw_subtitles, spoken))
     except Exception as exc:
         print(f"[render] word timing unavailable, using segment split: {exc}")
-        subtitles_list = split_subtitles_for_shorts(raw_subtitles, max_one_line=12, target_chunk_max=12)
+        subtitles_list = split_subtitles_for_shorts(raw_subtitles, max_one_line=10, target_chunk_max=10)
 
     repo_root = find_repo_root()
     bgm_path = repo_root / settings.bgm_path
