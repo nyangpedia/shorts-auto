@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useRef, useState } from "react";
 
-import type { DailyItem, DailyState } from "../api";
+import type { DailyItem, DailyState, TrendPoint } from "../api";
 
 interface DailyViewProps {
   readonly daily: DailyState | null;
@@ -14,6 +14,50 @@ interface DailyViewProps {
 
 const compact = (n: number) => new Intl.NumberFormat("ko-KR", { notation: "compact" }).format(n);
 const fmtDuration = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/** One keyword, one measure: small-channel breakouts per daily fetch. Median views/day stays a number, not a second axis. */
+function TrendCard({ keyword, points }: { keyword: string; points: readonly TrendPoint[] }) {
+  const W = 220, H = 56, PAD = 6;
+  const last = points[points.length - 1];
+  const weekAgo = points.length > 7 ? points[points.length - 8] : points[0];
+  const delta = last && weekAgo && points.length > 1 ? last.breakouts - weekAgo.breakouts : null;
+  const max = Math.max(1, ...points.map((p) => p.breakouts));
+  const x = (i: number) => PAD + (points.length > 1 ? (i / (points.length - 1)) * (W - PAD * 2) : (W - PAD * 2) / 2);
+  const y = (v: number) => H - PAD - (v / max) * (H - PAD * 2);
+  const path = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.breakouts).toFixed(1)}`).join(" ");
+
+  return (
+    <div className="trend">
+      <div className="trend-head">
+        <b>{keyword}</b>
+        {delta !== null ? (
+          <span className={`trend-delta ${delta > 0 ? "up" : delta < 0 ? "down" : ""}`}>
+            <i aria-hidden="true">{delta > 0 ? "▲" : delta < 0 ? "▼" : "–"}</i> {delta > 0 ? "+" : delta < 0 ? "−" : ""}{Math.abs(delta)} <small>({points.length > 7 ? "7일 전 대비" : "첫 기록 대비"})</small>
+          </span>
+        ) : null}
+      </div>
+      {points.length < 2 ? (
+        <p className="muted small">기록 쌓는 중 ({points.length}일째) · 2일부터 그래프가 그려집니다</p>
+      ) : (
+        <svg aria-label={`${keyword} 터진 영상 수 추이, 최근 ${last.breakouts}개`} className="trend-chart" role="img" viewBox={`0 0 ${W} ${H}`}>
+          <line className="trend-base" x1={PAD} x2={W - PAD} y1={H - PAD} y2={H - PAD} />
+          <path className="trend-line" d={path} />
+          {points.map((p, i) => (
+            <g key={p.date}>
+              <circle className="trend-hit" cx={x(i)} cy={y(p.breakouts)} r={9}>
+                <title>{`${p.date} · 터진 영상 ${p.breakouts}개 / ${p.count}개 · 하루 조회수 중간값 ${p.median_views_per_day.toLocaleString("ko-KR")}`}</title>
+              </circle>
+              {i === points.length - 1 ? <circle className="trend-dot" cx={x(i)} cy={y(p.breakouts)} r={4} /> : null}
+            </g>
+          ))}
+        </svg>
+      )}
+      {last ? (
+        <small className="muted">오늘 터진 영상 <b>{last.breakouts}</b>개 · 하루 조회수 중간값 {compact(last.median_views_per_day)}</small>
+      ) : null}
+    </div>
+  );
+}
 
 export function DailyView({ daily, isBusy, busyText, onSaveKeywords, onRefresh, onUse, onOpenProject }: DailyViewProps) {
   const [keywords, setKeywords] = useState<readonly string[]>(daily?.keywords ?? []);
@@ -72,6 +116,18 @@ export function DailyView({ daily, isBusy, busyText, onSaveKeywords, onRefresh, 
           </span>
         </div>
       </div>
+
+      {daily && daily.keywords.some((k) => daily.trends?.[k]?.length) ? (
+        <div className="card">
+          <div className="section-head">
+            <h2>키워드 추세</h2>
+            <p>구독자의 10배 넘게 조회된 최근 7일 쇼츠 수입니다. 몇 주째 줄면 그 포맷이 식는 신호입니다. 점에 마우스를 올리면 그날 숫자가 나옵니다.</p>
+          </div>
+          <div className="trends">
+            {daily.keywords.map((k) => <TrendCard key={k} keyword={k} points={daily.trends?.[k] ?? []} />)}
+          </div>
+        </div>
+      ) : null}
 
       {daily && daily.items.length > 0 ? (
         <div className="refs">

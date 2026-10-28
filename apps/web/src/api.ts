@@ -393,6 +393,14 @@ export interface DailyState {
   readonly keywords: readonly string[];
   readonly fetched_on: string | null;
   readonly items: readonly DailyItem[];
+  readonly trends?: Readonly<Record<string, readonly TrendPoint[]>>;
+}
+
+export interface TrendPoint {
+  readonly date: string;
+  readonly count: number;
+  readonly breakouts: number;
+  readonly median_views_per_day: number;
 }
 
 export function fetchDaily(): Promise<DailyState> {

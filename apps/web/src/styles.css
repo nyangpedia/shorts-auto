@@ -267,3 +267,20 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--ink-2); fo
   .hero-stats { flex-wrap: wrap; }
   .home-actions { grid-template-columns: 1fr; }
 }
+
+/* ── keyword trends (one series per card: accent line, text stays in ink tokens) ── */
+.trends { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px; }
+.trend { display: grid; gap: 6px; padding: 12px 14px; border: 1px solid var(--line); border-radius: 12px; background: var(--surface); }
+.trend-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.trend-head b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.trend-delta { font-size: 12px; font-weight: 700; color: var(--ink-2); white-space: nowrap; }
+.trend-delta small { font-weight: 500; color: var(--ink-3); }
+.trend-delta i { font-style: normal; }
+.trend-delta.up i { color: var(--ok); }
+.trend-delta.down i { color: var(--bad); }
+.trend-chart { width: 100%; height: 56px; overflow: visible; }
+.trend-base { stroke: var(--line); stroke-width: 1; }
+.trend-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.trend-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.trend-hit { fill: transparent; cursor: default; }
+.trend-hit:hover { fill: var(--accent-soft); }

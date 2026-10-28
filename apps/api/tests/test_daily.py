@@ -43,3 +43,9 @@ def test_daily_refresh_ranks_by_views_per_day_and_caches_for_the_day(tmp_path: P
     assert first["keywords"] == ["돈 습관", "money habits"]
     assert [i["video_id"] for i in first["items"]] == ["new_fast", "old_big"]  # 300k/1d beats 700k/7d
     assert FakeYouTube.calls == 2 and again == first  # second refresh served from today's cache
+
+    today = date.today().isoformat()
+    # both fakes have 1,000 subscribers, so 300k and 700k views are both 10x+ breakouts
+    assert first["trends"]["돈 습관"] == [
+        {"date": today, "count": 2, "breakouts": 2, "median_views_per_day": (100_000 + 300_000) // 2}
+    ]

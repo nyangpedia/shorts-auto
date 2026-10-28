@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import statistics
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from typing import Callable
@@ -16,6 +17,9 @@ from app.references.files import SELECTED_REFERENCE_FILE
 from app.references.models import ReferenceSearchRequest
 
 DAILY_FILE = "_daily_references.json"
+TRENDS_FILE = "_daily_trends.json"  # {date: {keyword: stats}}; the market signal for "is this format cooling off?"
+BREAKOUT_RATIO = 10  # views >= 10x subscribers counts as a small-channel breakout
+TREND_DAYS = 30
 MAX_KEYWORDS = 8
 KEEP = 60
 
@@ -60,10 +64,33 @@ def views_per_day(view_count: int, upload_date: str, today: date) -> int:
     return view_count // max(1, (today - uploaded).days)
 
 
+def keyword_stats(candidates: list, today: date) -> dict:
+    per_day = [views_per_day(c.view_count, c.upload_date, today) for c in candidates]
+    return {
+        "count": len(candidates),
+        "breakouts": sum(1 for c in candidates if (c.vs_ratio or 0) >= BREAKOUT_RATIO),
+        "median_views_per_day": int(statistics.median(per_day)) if per_day else 0,
+    }
+
+
+def _load_trends(outputs: Path) -> dict:
+    try:
+        return json.loads((outputs / TRENDS_FILE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+
+
+def _trend_series(outputs: Path, keywords: list[str]) -> dict[str, list[dict]]:
+    history = _load_trends(outputs)
+    days = sorted(history)[-TREND_DAYS:]
+    return {k: [{"date": d, **history[d][k]} for d in days if k in history[d]] for k in keywords}
+
+
 def _response(outputs: Path, data: dict) -> dict:
     used = _used_videos(outputs)
     items = [{**item, "used_by": used.get(item["video_id"])} for item in data.get("items", [])]
-    return {"keywords": data.get("keywords", []), "fetched_on": data.get("fetched_on"), "items": items}
+    keywords = data.get("keywords", [])
+    return {"keywords": keywords, "fetched_on": data.get("fetched_on"), "items": items, "trends": _trend_series(outputs, keywords)}
 
 
 def create_daily_router(
@@ -100,6 +127,7 @@ def create_daily_router(
         try:
             client = youtube_client_factory(settings.youtube_api_key)
             found: dict[str, dict] = {}
+            stats: dict[str, dict] = {}
             for keyword in data["keywords"]:
                 request = ReferenceSearchRequest(
                     keyword=keyword,
@@ -108,7 +136,9 @@ def create_daily_router(
                     duration_filter="under_180",
                     max_results=50,
                 )
-                for candidate in client.search(request):
+                results = client.search(request)
+                stats[keyword] = keyword_stats(results, today)
+                for candidate in results:
                     item = candidate.model_dump()
                     item["keyword"] = keyword
                     item["views_per_day"] = views_per_day(candidate.view_count, candidate.upload_date, today)
@@ -118,6 +148,9 @@ def create_daily_router(
         items = sorted(found.values(), key=lambda i: i["views_per_day"], reverse=True)[:KEEP]
         data = {"keywords": data["keywords"], "fetched_on": today.isoformat(), "items": items}
         _save(outputs, data)
+        history = _load_trends(outputs)
+        history[today.isoformat()] = stats  # a forced re-run overwrites the day instead of double counting
+        (outputs / TRENDS_FILE).write_text(json.dumps(history, ensure_ascii=False), encoding="utf-8")
         return _response(outputs, data)
 
     return router
