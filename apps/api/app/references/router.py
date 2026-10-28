@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import logging
 import re
 from datetime import date
@@ -58,6 +59,7 @@ SCRIPT_GENERATED_FILE_KEYS = [
 
 
 logger = logging.getLogger(__name__)
+SEARCH_CACHE_FILE = "_search_cache.json"
 _HANGUL = re.compile(r"[가-힣]")
 
 
@@ -92,8 +94,24 @@ def create_references_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/projects/{project_id}/reference", tags=["reference"])
     # Same search on the same day returns the cached result: a genre button is 6 searches (600 quota units).
-    # ponytail: in-memory, cleared on restart; persist to outputs/ if restarts make it miss often.
-    search_cache: dict[str, list[ReferenceCandidate]] = {}
+    # Kept on disk so a server restart doesn't spend the quota again; only today's entries are kept.
+    def read_search_cache(outputs: Path, key: str) -> list[ReferenceCandidate] | None:
+        try:
+            cached = json.loads((outputs / SEARCH_CACHE_FILE).read_text(encoding="utf-8")).get(key)
+        except (OSError, ValueError):
+            return None
+        return None if cached is None else [ReferenceCandidate.model_validate(item) for item in cached]
+
+    def write_search_cache(outputs: Path, key: str, candidates: list[ReferenceCandidate]) -> None:
+        path = outputs / SEARCH_CACHE_FILE
+        try:
+            cache = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            cache = {}
+        today = key.split("|", 1)[0]
+        cache = {k: v for k, v in cache.items() if k.startswith(today)}
+        cache[key] = [c.model_dump() for c in candidates]
+        path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
 
     def project_dir(outputs_dir: Path, project_id: str) -> Path:
         read_project(outputs_dir, project_id)
@@ -215,14 +233,14 @@ def create_references_router(
             job_id = job.job_id
             update_job_state(outputs, project_id, job.job_id, "running", "Searching YouTube")
             cache_key = f"{date.today()}|{payload.model_dump_json()}"
-            candidates = search_cache.get(cache_key)
+            candidates = read_search_cache(outputs, cache_key)
             if candidates is None:
                 client = youtube_client_factory(settings.youtube_api_key)
                 candidates = add_korean_titles(
                     client.search(payload),
                     lambda: analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model),
                 )
-                search_cache[cache_key] = candidates
+                write_search_cache(outputs, cache_key, candidates)
             write_reference_candidates(project_dir(outputs, project_id), candidates)
             update_job_state(
                 outputs,

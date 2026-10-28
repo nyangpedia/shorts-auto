@@ -41,3 +41,25 @@ def test_korean_titles_only_gloss_foreign_titles():
     assert [c.title_ko for c in glossed] == [None, "똑똑한 사람일수록 사과한다"]
     # a broken or mismatched reply leaves the search results untouched
     assert add_korean_titles(items, lambda: _Translator([])) == items
+
+
+def test_same_search_same_day_survives_restart(tmp_path: Path):
+    calls = []
+
+    class FakeYouTube:
+        def __init__(self, key):
+            pass
+
+        def search(self, request):
+            calls.append(request.keyword)
+            return [_candidate("a", "돈 버는 습관")]
+
+    body = {"keyword": "돈 습관"}
+    first = TestClient(create_app(repo_root=tmp_path, youtube_client_factory=FakeYouTube))
+    pid = first.post("/api/projects", json={"project_title": "x"}).json()["project"]["project_id"]
+    first.post(f"/api/projects/{pid}/reference/search", json=body)
+
+    restarted = TestClient(create_app(repo_root=tmp_path, youtube_client_factory=FakeYouTube))
+    other = restarted.post("/api/projects", json={"project_title": "y"}).json()["project"]["project_id"]
+    again = restarted.post(f"/api/projects/{other}/reference/search", json=body).json()
+    assert calls == ["돈 습관"] and [c["video_id"] for c in again["candidates"]] == ["a"]
