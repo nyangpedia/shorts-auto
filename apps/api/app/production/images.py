@@ -68,6 +68,8 @@ def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path)
         )
     if resp is None:
         raise RuntimeError("Cloudflare 이미지 서버가 응답하지 않습니다. 잠시 후 다시 시도해주세요.")
+    if resp.status_code == 429:
+        raise RuntimeError("오늘 Cloudflare 무료 이미지 한도를 다 썼습니다. 한국 시간 오전 9시(UTC 자정)에 다시 채워집니다.")
     resp.raise_for_status()
     target.write_bytes(base64.b64decode(resp.json()["result"]["image"]))
     usage.record("image")
