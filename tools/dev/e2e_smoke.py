@@ -18,7 +18,7 @@ def step(name, method, url, **kw):
     return r.json()
 
 
-proj = step("create project", "POST", "/projects", json={"project_title": "e2e octopus"})
+proj = step("create project", "POST", "/projects", json={"project_title": "[테스트] e2e"})
 pid = proj["project"]["project_id"]
 print("project:", pid, flush=True)
 P = f"/projects/{pid}"
