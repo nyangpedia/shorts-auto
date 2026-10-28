@@ -31,3 +31,6 @@ def test_topics_are_collected_and_starting_one_copies_the_analysis(tmp_path: Pat
     left = client.post("/api/topics/hide", json={"ids": [f"{source}:0"]}).json()["topics"]
     assert [t["title"] for t in left] == ["주제 둘"]
     assert client.post(f"/api/topics/{source}/0/start").status_code == 404
+
+    body = client.post("/api/topics/restore", json={"ids": [f"{source}:0"]}).json()
+    assert [t["title"] for t in body["topics"]] == ["주제 하나", "주제 둘"] and body["hidden"] == []

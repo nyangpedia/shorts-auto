@@ -9,6 +9,7 @@ import {
   fetchDaily,
   fetchTopics,
   hideTopics,
+  restoreTopics,
   fetchUsage,
   refreshDaily,
   saveDailyKeywords,
@@ -84,12 +85,13 @@ export default function App() {
     return asked === "topics" || asked === "daily" ? asked : "project";
   });
   const [topics, setTopics] = useState<readonly TopicItem[]>([]);
+  const [hiddenTopics, setHiddenTopics] = useState<readonly TopicItem[]>([]);
   const [freshProjectId, setFreshProjectId] = useState<string | null>(null);
   const [daily, setDaily] = useState<DailyState | null>(null);
 
   const refreshUsage = () => void fetchUsage().then(setUsageToday).catch(() => undefined);
   useEffect(refreshUsage, []);
-  const loadTopics = () => void fetchTopics().then((r) => setTopics(r.topics)).catch(() => undefined);
+  const loadTopics = () => void fetchTopics().then((r) => { setTopics(r.topics); setHiddenTopics(r.hidden ?? []); }).catch(() => undefined);
   useEffect(loadTopics, []);
   useEffect(() => {
     if (view === "daily" && !daily) void fetchDaily().then(setDaily).catch((reason) => setError(errorText(reason, "오늘의 레퍼런스를 불러오지 못했습니다.")));
@@ -235,11 +237,13 @@ export default function App() {
       return getProject(started.project.project_id);
     });
 
-  async function handleHideTopics(ids: readonly string[]) {
+  async function handleHideTopics(ids: readonly string[], restore = false) {
     try {
-      setTopics((await hideTopics(ids)).topics);
+      const listing = await (restore ? restoreTopics(ids) : hideTopics(ids));
+      setTopics(listing.topics);
+      setHiddenTopics(listing.hidden ?? []);
     } catch (reason) {
-      setError(errorText(reason, "주제를 지우지 못했습니다."));
+      setError(errorText(reason, restore ? "주제를 되살리지 못했습니다." : "주제를 지우지 못했습니다."));
     }
   }
 
@@ -464,7 +468,7 @@ export default function App() {
               <div className="banner bad" role="alert">⚠️ {error} <button className="link-btn" onClick={() => setError(null)} type="button">닫기</button></div>
             ) : null}
             {view === "topics" ? (
-              <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} onHide={(ids) => void handleHideTopics(ids)} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
+              <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} hidden={hiddenTopics} onHide={(ids) => void handleHideTopics(ids)} onRestore={(ids) => void handleHideTopics(ids, true)} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
             ) : (
               <DailyView
                 busyText={busy?.text ?? null}

@@ -9,9 +9,11 @@ interface TopicsViewProps {
   readonly onStart: (topic: TopicItem) => void;
   readonly onOpenProject: (projectId: string) => void;
   readonly onHide: (ids: readonly string[]) => void;
+  readonly hidden?: readonly TopicItem[];
+  readonly onRestore: (ids: readonly string[]) => void;
 }
 
-export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, onHide }: TopicsViewProps) {
+export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, onHide, hidden = [], onRestore }: TopicsViewProps) {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) => setPicked((s) => {
     const next = new Set(s);
@@ -70,6 +72,21 @@ export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, o
           ))}
         </div>
       )}
+      {hidden.length > 0 ? (
+        <details className="more">
+          <summary>삭제한 주제 ({hidden.length})</summary>
+          <div className="topics">
+            {hidden.map((topic) => (
+              <div className="topic" key={topic.id} style={{ opacity: 0.7 }}>
+                <span />
+                <span><b>{topic.title}</b><small style={{ display: "block", color: "var(--ink-3)" }}>출처: {topic.reference_title}</small></span>
+                <button className="btn small" onClick={() => onRestore([topic.id])} type="button">되살리기</button>
+              </div>
+            ))}
+          </div>
+          <button className="btn small" onClick={() => onRestore(hidden.map((t) => t.id))} type="button">전부 되살리기</button>
+        </details>
+      ) : null}
     </div>
   );
 }

@@ -32,7 +32,7 @@ def _read_json(path: Path) -> dict:
         return {}
 
 
-def collect_topics(outputs: Path) -> list[dict]:
+def collect_topics(outputs: Path, hidden_only: bool = False) -> list[dict]:
     used = _read_json(outputs / USED_TOPICS_FILE)
     hidden = set(_read_json(outputs / HIDDEN_TOPICS_FILE).get("ids", []))
     topics = []
@@ -45,7 +45,7 @@ def collect_topics(outputs: Path) -> list[dict]:
         created = datetime.fromtimestamp(analysis_path.stat().st_mtime).isoformat(timespec="minutes")
         for index, topic in enumerate(analysis.get("recommended_topics") or []):
             topic_id = f"{project.project_id}:{index}"
-            if topic_id in hidden:
+            if (topic_id in hidden) != hidden_only:
                 continue
             topics.append({
                 "id": topic_id,
@@ -69,16 +69,26 @@ class HideTopicsRequest(BaseModel):
 def create_topics_router(outputs_dir_provider: Callable[[], Path]) -> APIRouter:
     router = APIRouter(prefix="/api/topics", tags=["topics"])
 
+    def _listing(outputs: Path) -> dict:
+        return {"topics": collect_topics(outputs), "hidden": collect_topics(outputs, hidden_only=True)}
+
     @router.get("")
     def get_topics(outputs: Path = Depends(outputs_dir_provider)):
-        return {"topics": collect_topics(outputs)}
+        return _listing(outputs)
 
     @router.post("/hide")
     def hide_topics(payload: HideTopicsRequest, outputs: Path = Depends(outputs_dir_provider)):
         path = outputs / HIDDEN_TOPICS_FILE
         hidden = set(_read_json(path).get("ids", [])) | set(payload.ids)
         path.write_text(json.dumps({"ids": sorted(hidden)}, ensure_ascii=False), encoding="utf-8")
-        return {"topics": collect_topics(outputs)}
+        return _listing(outputs)
+
+    @router.post("/restore")
+    def restore_topics(payload: HideTopicsRequest, outputs: Path = Depends(outputs_dir_provider)):
+        path = outputs / HIDDEN_TOPICS_FILE
+        hidden = set(_read_json(path).get("ids", [])) - set(payload.ids)
+        path.write_text(json.dumps({"ids": sorted(hidden)}, ensure_ascii=False), encoding="utf-8")
+        return _listing(outputs)
 
     @router.post("/{source_project_id}/{index}/start")
     def start_from_topic(source_project_id: str, index: int, outputs: Path = Depends(outputs_dir_provider)):

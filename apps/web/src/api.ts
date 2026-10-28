@@ -335,11 +335,20 @@ export interface TopicItem {
   readonly used_by: string | null;
 }
 
-export function fetchTopics(): Promise<{ topics: readonly TopicItem[] }> {
+export interface TopicListing {
+  readonly topics: readonly TopicItem[];
+  readonly hidden?: readonly TopicItem[];
+}
+
+export function restoreTopics(ids: readonly string[]): Promise<TopicListing> {
+  return request("/api/topics/restore", { method: "POST", body: JSON.stringify({ ids }) });
+}
+
+export function fetchTopics(): Promise<TopicListing> {
   return request("/api/topics");
 }
 
-export function hideTopics(ids: readonly string[]): Promise<{ topics: readonly TopicItem[] }> {
+export function hideTopics(ids: readonly string[]): Promise<TopicListing> {
   return request("/api/topics/hide", { method: "POST", body: JSON.stringify({ ids }) });
 }
 
