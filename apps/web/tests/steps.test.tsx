@@ -48,7 +48,9 @@ describe("ScriptStep", () => {
     onSelect: vi.fn(),
     onFinalize: vi.fn(),
     onFactCheck: vi.fn(),
-    similarity: null
+    similarity: null,
+    videoTitle: "untitled",
+    onUseTitle: vi.fn()
   };
 
   it("saves only after editing and blocks fact check on unsaved text", async () => {
@@ -80,10 +82,21 @@ describe("ScriptStep", () => {
   });
 });
 
+describe("ScriptStep title options", () => {
+  it("lets the user pick a recommended title as the project/opening title", async () => {
+    const user = userEvent.setup();
+    const onUseTitle = vi.fn();
+    const withTitles = { ...candidate, title_options: ["문어는 심장이 3개?", "파란 피의 비밀"] } as ScriptCandidate;
+    render(<ScriptStep candidates={[withTitles]} selectedCandidateId="draft_a" finalScript={null} factCheck={null} similarity={null} ttsValidation={null} isBusy={false} busyText={null} onSelect={vi.fn()} onFinalize={vi.fn()} onSave={vi.fn()} onFactCheck={vi.fn()} videoTitle="" onUseTitle={onUseTitle} />);
+    await user.click(screen.getByRole("button", { name: "파란 피의 비밀" }));
+    expect(onUseTitle).toHaveBeenCalledWith("파란 피의 비밀");
+  });
+});
+
 describe("ScriptStep similarity", () => {
   it("shows the overlap level and the copied sentence", () => {
     const similarity = { score: 0.42, level: "높음" as const, comparable: true, sentences: [{ text: "피라미드는 노예가 지었다.", score: 0.9 }] };
-    render(<ScriptStep candidates={[candidate]} selectedCandidateId="draft_a" finalScript="피라미드는 노예가 지었다." factCheck={null} similarity={similarity} ttsValidation={null} isBusy={false} busyText={null} onSelect={vi.fn()} onFinalize={vi.fn()} onSave={vi.fn()} onFactCheck={vi.fn()} />);
+    render(<ScriptStep candidates={[candidate]} selectedCandidateId="draft_a" finalScript="피라미드는 노예가 지었다." factCheck={null} similarity={similarity} ttsValidation={null} isBusy={false} busyText={null} onSelect={vi.fn()} onFinalize={vi.fn()} onSave={vi.fn()} onFactCheck={vi.fn()} videoTitle="" onUseTitle={vi.fn()} />);
     expect(screen.getByText("높음 · 42%")).toBeInTheDocument();
     expect(screen.getByText("원본과 거의 같음")).toBeInTheDocument();
   });

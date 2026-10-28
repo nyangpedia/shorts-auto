@@ -15,6 +15,8 @@ interface ScriptStepProps {
   readonly onFinalize: (feedback: string) => void;
   readonly onSave: (script: string) => void;
   readonly onFactCheck: () => void;
+  readonly videoTitle: string;
+  readonly onUseTitle: (title: string) => void;
 }
 
 const VERDICT_CHIP: Record<FactVerdict, string> = { 의심: "bad", 논란: "warn", 확실: "ok" };
@@ -63,6 +65,25 @@ export function ScriptStep(props: ScriptStepProps) {
           </button>
         ))}
       </div>
+
+      {(() => {
+        const options = candidates.find((c) => c.candidate_id === selectedCandidateId)?.title_options ?? [];
+        return options.length > 0 ? (
+          <div className="card">
+            <div className="section-head">
+              <h2>쇼츠 제목</h2>
+              <p>영상 시작 0~2초에 크게 뜨는 오프닝 제목이자 프로젝트 이름입니다. 고른 뒤 다듬어도 됩니다.</p>
+            </div>
+            <div className="chips">
+              {options.map((title) => (
+                <button aria-pressed={props.videoTitle === title} disabled={isBusy} key={title} onClick={() => props.onUseTitle(title)} type="button">
+                  {title}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null;
+      })()}
 
       {selectedCandidateId && (
         <div className="card">

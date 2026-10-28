@@ -210,7 +210,8 @@ export default function App() {
 
   const handleUseDaily = (item: DailyItem) =>
     void runGlobal("이 쇼츠로 새 프로젝트를 만드는 중…", async () => {
-      const created = await createProject(item.title.slice(0, 60));
+      // Project title doubles as the 0–2s opening title on render; never inherit someone else's video title.
+      const created = await createProject("untitled");
       await addDirectReference(created.project_id, item.url);
       await selectReference(created.project_id, item.video_id);
       setDaily((d) => (d ? { ...d, items: d.items.map((i) => (i.video_id === item.video_id ? { ...i, used_by: created.project_id } : i)) } : d));
@@ -500,6 +501,8 @@ export default function App() {
                   onSelect={handleSelectCandidate}
                   selectedCandidateId={scripts?.selected_candidate?.candidate_id ?? null}
                   ttsValidation={scripts?.tts_validation ?? null}
+                  onUseTitle={handleTitleChange}
+                  videoTitle={project.project_title}
                 />
               )}
               {viewStep === 4 && (
