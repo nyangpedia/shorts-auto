@@ -78,7 +78,7 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 원칙: 기능·화면·파일 형식은 유지, 코드는 새로 작성. 대본/이미지 프롬프트는 기존과 A/B 비교 후 교체.
 - 진행 상황 확인: `git blame --line-porcelain <file> | grep -c "^author gwnam1"` (원작자 줄 수)
 - [x] 1단계 제작 파이프라인 (`app/production/`: paths, media, voice, scenes, images, motion, revise, state, numbers). DALL·E 3 → `gpt-image-2.5-flare`. Qwen TTS 제거.
-- [ ] 2단계 대본·분석 프롬프트 (`scripts/generation.py`, `references/analysis.py`) — A/B 필수
+- [x] 2단계 대본·분석 프롬프트 (`scripts/generation.py`, `references/analysis.py`) — A/B 완료: 새 쪽이 분량·정확성 기준을 더 잘 지킴
 - [ ] 3단계 레퍼런스 (`references/router.py`, `youtube.py`, `files.py`, `audio.py`, `models.py`)
 - [ ] 4단계 렌더러·제작 라우터·작업 기록·프로젝트·설정 (`production/renderer.py`, `production/router.py`, `production/models.py`, `jobs/*`, `projects/service.py`, `core/settings.py`, `main.py`)
 - [ ] 5단계 웹 `api.ts`, `types.ts`, 원작자 테스트

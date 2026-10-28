@@ -130,7 +130,7 @@ def test_generate_select_and_finalize_script(tmp_path: Path):
     project = client.get(f"/api/projects/{project_id}").json()["project"]
 
     assert generated.status_code == 200
-    assert len(generated.json()["candidates"]) == 4
+    assert len(generated.json()["candidates"]) == 2
     assert selected.status_code == 200
     assert selected.json()["selected_candidate"]["candidate_id"] == "different-topic-1"
     assert finalized.status_code == 200

@@ -148,23 +148,17 @@ def test_candidate_prompt_requires_viral_drafts_and_reference_structure():
     assert "체감 단위 환산" in prompt
 
 
-def test_validate_candidate_payload_requires_one_same_and_three_different():
-    candidates = validate_candidate_payload(candidate_payload())
-
-    assert len(candidates) == 4
-    assert candidates[0].candidate_type == "same_topic"
-    assert [item.candidate_type for item in candidates[1:]] == [
-        "different_topic",
-        "different_topic",
-        "different_topic",
-    ]
+def test_validate_candidate_payload_keeps_the_two_drafts():
+    payload = candidate_payload()  # four legacy-typed items
+    payload["candidates"][2]["candidate_type"] = "draft_b"
+    payload["candidates"][3]["candidate_type"] = "draft_a"
+    assert [c.candidate_type for c in validate_candidate_payload(payload)] == ["draft_b", "draft_a"]
 
 
-def test_validate_candidate_payload_rejects_wrong_mix():
-    payload = candidate_payload()
-    payload["candidates"][1]["candidate_type"] = "same_topic"
+def test_validate_candidate_payload_rejects_a_single_draft():
+    payload = {"candidates": [candidate("draft_a", "draft_a").model_dump()]}
 
-    with pytest.raises(ValueError, match="one same_topic and three different_topic"):
+    with pytest.raises(ValueError, match="두 개"):
         validate_candidate_payload(payload)
 
 
