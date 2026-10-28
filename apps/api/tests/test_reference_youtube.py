@@ -575,5 +575,5 @@ def test_comma_separated_keywords_run_one_search_each():
             return httpx.Response(200, json={"items": []})
 
     client = YouTubeClient("key", http_client=httpx.Client(transport=Capture()))
-    client.search(ReferenceSearchRequest(keyword="실화 썰, true story ,実話,,a,b"))
-    assert queries == ["실화 썰", "true story", "実話", "a"]  # trimmed, empties dropped, capped at 4
+    client.search(ReferenceSearchRequest(keyword="실화 썰, true story ,実話,,a,b,c,d,e,f,g"))
+    assert queries == ["실화 썰", "true story", "実話", "a", "b", "c", "d", "e", "f"]  # trimmed, empties dropped, capped at 9

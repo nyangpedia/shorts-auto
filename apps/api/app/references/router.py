@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date
 from pathlib import Path
 from typing import Callable
 
@@ -90,6 +91,9 @@ def create_references_router(
     analysis_client_factory: Callable[[str, str], AnalysisClient] = OpenAIAnalysisClient,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/projects/{project_id}/reference", tags=["reference"])
+    # Same search on the same day returns the cached result: a genre button is 6 searches (600 quota units).
+    # ponytail: in-memory, cleared on restart; persist to outputs/ if restarts make it miss often.
+    search_cache: dict[str, list[ReferenceCandidate]] = {}
 
     def project_dir(outputs_dir: Path, project_id: str) -> Path:
         read_project(outputs_dir, project_id)
@@ -210,11 +214,15 @@ def create_references_router(
             )
             job_id = job.job_id
             update_job_state(outputs, project_id, job.job_id, "running", "Searching YouTube")
-            client = youtube_client_factory(settings.youtube_api_key)
-            candidates = client.search(payload)
-            candidates = add_korean_titles(
-                candidates, lambda: analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model)
-            )
+            cache_key = f"{date.today()}|{payload.model_dump_json()}"
+            candidates = search_cache.get(cache_key)
+            if candidates is None:
+                client = youtube_client_factory(settings.youtube_api_key)
+                candidates = add_korean_titles(
+                    client.search(payload),
+                    lambda: analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model),
+                )
+                search_cache[cache_key] = candidates
             write_reference_candidates(project_dir(outputs, project_id), candidates)
             update_job_state(
                 outputs,

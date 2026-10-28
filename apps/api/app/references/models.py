@@ -43,7 +43,7 @@ def _bounded_non_empty(value: str, field_name: str, max_length: int) -> str:
 
 
 class ReferenceSearchRequest(BaseModel):
-    keyword: Optional[str] = Field(default="", max_length=200)
+    keyword: Optional[str] = Field(default="", max_length=400)
     channel_query: Optional[str] = Field(default=None, max_length=200)
     published_after: Optional[str] = None
     published_before: Optional[str] = None

@@ -214,7 +214,7 @@ class YouTubeClient:
             }
             # Comma-separated keywords = one search each. YouTube matches results to the query's language,
             # so foreign references need foreign-language keywords (each costs another 100 units).
-            keywords = [k.strip() for k in request.keyword.split(",") if k.strip()][:4]
+            keywords = [k.strip() for k in request.keyword.split(",") if k.strip()][:9]
             if request.duration_filter in ("under_60", "under_120", "under_180"):
                 # YouTube "short" = under 4 minutes; without it most hits are long videos we'd discard.
                 base_params["videoDuration"] = "short"

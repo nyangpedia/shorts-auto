@@ -20,19 +20,19 @@ const DURATIONS: readonly { value: DurationFilter; label: string; max: number }[
   { value: "all", label: "전체 길이", max: 600 }
 ];
 
-// Korean + English + Japanese per niche: YouTube returns results in the query's language,
-// so foreign references only show up for foreign-language keywords (100 quota units each).
+// Two keywords each in Korean, English and Japanese: YouTube returns results in the query's language,
+// and one phrasing misses videos titled another way. 6 searches = 600 quota units (cached for the day).
 const GENRES = [
-  { label: "정보·상식", keyword: "알아두면 쓸모있는 상식, fun facts, 雑学" },
-  { label: "썰·이야기", keyword: "실화 썰, true story, 実話" },
-  { label: "뉴스·시사", keyword: "오늘의 뉴스 이슈, news explained, ニュース 解説" },
-  { label: "명언·동기부여", keyword: "동기부여 명언, motivational quotes, 名言" },
-  { label: "재테크", keyword: "돈 버는 습관, money habits, お金 習慣" },
-  { label: "건강", keyword: "건강 습관 꿀팁, health tips, 健康 習慣" },
-  { label: "심리", keyword: "심리학 행동 특징, psychology facts, 心理学" },
-  { label: "역사", keyword: "역사 이야기, history facts, 歴史 雑学" },
-  { label: "과학", keyword: "신기한 과학, science facts, 科学 雑学" },
-  { label: "미스터리", keyword: "미스터리 괴담, unsolved mystery, 都市伝説" }
+  { label: "정보·상식", keyword: "알아두면 쓸모있는 상식, 잡학 지식, fun facts, did you know, 雑学, 豆知識" },
+  { label: "썰·이야기", keyword: "실화 썰, 소름돋는 사연, true story, storytime, 実話, 感動する話" },
+  { label: "뉴스·시사", keyword: "오늘의 뉴스 이슈, 시사 정리, news explained, current events, ニュース 解説, 時事" },
+  { label: "명언·동기부여", keyword: "동기부여 명언, 인생 조언, motivational quotes, life advice, 名言, 人生 教訓" },
+  { label: "재테크", keyword: "돈 버는 습관, 부자 습관, money habits, personal finance tips, お金 習慣, 節約術" },
+  { label: "건강", keyword: "건강 습관 꿀팁, 몸에 좋은 음식, health tips, healthy habits, 健康 習慣, 健康 雑学" },
+  { label: "심리", keyword: "심리학 행동 특징, 연애 심리, psychology facts, dating psychology, 心理学, 恋愛 心理" },
+  { label: "역사", keyword: "역사 이야기, 세계사 상식, history facts, history explained, 歴史 雑学, 世界史" },
+  { label: "과학", keyword: "신기한 과학, 우주 상식, science facts, space facts, 科学 雑学, 宇宙 雑学" },
+  { label: "미스터리", keyword: "미스터리 괴담, 미제 사건, unsolved mystery, creepy facts, 都市伝説, 未解決事件" }
 ] as const;
 
 const fmt = (value: number | null) => (value === null ? "-" : new Intl.NumberFormat("ko-KR", { notation: "compact" }).format(value));
@@ -133,7 +133,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
           ))}
         </div>
         <p className="muted small" style={{ margin: "10px 0 0" }}>
-          분야를 누르면 바로 검색하고, 새 프로젝트에선 마지막 분야로 자동 검색합니다. 해외 쇼츠는 그 나라 말 키워드로만 나옵니다. 쉼표로 나눈 키워드마다 검색하며, 키워드 1개당 YouTube 무료 한도 100포인트(하루 10,000)를 씁니다.
+          분야를 누르면 바로 검색하고, 새 프로젝트에선 마지막 분야로 자동 검색합니다. 해외 쇼츠는 그 나라 말 키워드로만 나옵니다. 쉼표로 나눈 키워드마다 검색하며(최대 9개), 키워드 1개당 YouTube 무료 한도 100포인트(하루 10,000)를 씁니다. 분야 버튼은 600포인트이고, 같은 날 같은 검색은 저장된 결과를 써서 한도를 쓰지 않습니다.
         </p>
         <details className="more">
           <summary>상세 조건 (채널, 기간, 조회수)</summary>
