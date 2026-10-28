@@ -40,7 +40,7 @@ def test_gemini_tts_writes_sped_up_wav(tmp_path, monkeypatch):
     import base64
     import google.genai as genai
     from app.core.settings import AppSettings
-    from app.production import service
+    from app.production import voice
 
     calls = {}
 
@@ -53,8 +53,9 @@ def test_gemini_tts_writes_sped_up_wav(tmp_path, monkeypatch):
             return SimpleNamespace(output_audio=SimpleNamespace(data=base64.b64encode(b"RIFFfake").decode()))
 
     monkeypatch.setattr(genai, "Client", FakeClient)
-    monkeypatch.setattr(service, "_change_audio_speed", lambda src, dst, rate: dst.write_bytes(src.read_bytes() + str(rate).encode()))
-    out = service._generate_gemini_tts(tmp_path, "안녕", AppSettings(gemini_api_key="k"))
+    monkeypatch.setattr(voice, "retime_audio", lambda src, dst, tempo: dst.write_bytes(src.read_bytes() + str(tempo).encode()))
+    (tmp_path / "final_script.md").write_text("안녕", encoding="utf-8")
+    out = voice.generate_tts_for_project(tmp_path, AppSettings(gemini_api_key="k", tts_provider="gemini"))
     assert out.read_bytes() == b"RIFFfake1.2"
     assert calls["generation_config"] == {"speech_config": [{"voice": "Kore"}]}
     assert not (tmp_path / "temp_tts_raw.wav").exists()
@@ -71,7 +72,7 @@ def test_llm_key_prefers_gemini_only_with_base_url():
 def test_cloudflare_retries_transient_400(tmp_path, monkeypatch):
     import base64
     from app.core.settings import AppSettings
-    from app.production import service
+    from app.production import images as service
 
     codes = iter([400, 200])
     calls = []
@@ -94,7 +95,7 @@ def test_cloudflare_retries_transient_400(tmp_path, monkeypatch):
 def test_cloudflare_falls_back_to_square_model(tmp_path, monkeypatch):
     import base64
     from app.core.settings import AppSettings
-    from app.production import service
+    from app.production import images as service
 
     used = []
 
@@ -114,21 +115,20 @@ def test_cloudflare_falls_back_to_square_model(tmp_path, monkeypatch):
 def test_concept_prompt_uses_selected_style(tmp_path, monkeypatch):
     import json as _json
     from app.core.settings import AppSettings
-    from app.production import service
+    from app.production import scenes as service
 
-    (tmp_path / "final_script.md").write_text("첫 문장입니다. 두 번째 문장입니다.", encoding="utf-8")
+    (tmp_path / "final_script.md").write_text("첫 문장입니다. 두 번째 문장으로 넘어가는 꽤 긴 이야기입니다.", encoding="utf-8")
     seen = {}
-    reply = {"concept_kit": {"visual_style": "x"}, "video_scenes": [
-        {"scene_id": 1, "start": 0, "end": 2, "narration": "첫 문장입니다."}]}
 
-    def create(**kw):
-        seen["prompt"] = kw["messages"][0]["content"]
-        return SimpleNamespace(choices=[SimpleNamespace(message=SimpleNamespace(content=_json.dumps(reply)))])
+    def ask(settings, prompt, temperature=0.3):
+        seen["prompt"] = prompt
+        return {"concept_kit": {"visual_style": "x"}, "scenes": [{"scene_id": 1, "start_image_prompt": "a"}, {"scene_id": 2, "start_image_prompt": "b"}]}
 
-    monkeypatch.setattr(service, "make_llm_client", lambda settings: SimpleNamespace(chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
-    monkeypatch.setattr(service, "calibrate_scenes_with_stt", lambda scenes, stt, dur: scenes)
-    kit, _ = service.generate_concept_kit_and_video_scenes(tmp_path, AppSettings(), "webtoon")
+    monkeypatch.setattr(service, "ask_json", ask)
+    kit, scenes = service.generate_concept_kit_and_video_scenes(tmp_path, AppSettings(), "webtoon")
     assert "Korean webtoon" in seen["prompt"] and "clay" not in seen["prompt"].lower()
+    assert [s.narration for s in scenes] == service.script_beats("첫 문장입니다. 두 번째 문장으로 넘어가는 꽤 긴 이야기입니다.")
+    assert scenes[0].start == 0.0 and all(a.end == b.start for a, b in zip(scenes, scenes[1:]))
     assert kit.style_id == "webtoon"
     assert _json.loads((tmp_path / "concept_kit.json").read_text(encoding="utf-8"))["style_id"] == "webtoon"
 
@@ -176,7 +176,7 @@ def test_fallback_llm_does_not_retry_bad_request():
 
 
 def test_kenburns_moves_rotate_without_repeating_neighbors():
-    from app.production.service import _kenburns_motion
+    from app.production.media import _kenburns_motion
 
     moves = [_kenburns_motion(i, 150) for i in range(1, 11)]
     assert all(a != b for a, b in zip(moves, moves[1:]))

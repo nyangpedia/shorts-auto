@@ -261,7 +261,7 @@ def render_final_shorts(
 
         if not (video_path.exists() and video_path.stat().st_size > 1000) and start_img_path.exists():
             # No scene video made: give the still a Ken Burns move instead of a frozen frame.
-            from app.production.service import _make_kenburns_video
+            from app.production.media import _make_kenburns_video
 
             video_path = tmp_dir / f"kenburns_{scene_id:02d}.mp4"
             _make_kenburns_video(scene_id, start_img_path, video_path, math.ceil(target_dur))
