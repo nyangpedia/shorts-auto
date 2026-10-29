@@ -122,7 +122,7 @@ def _generate_gemini_image(settings: AppSettings, prompt: str, target: Path) -> 
 
 # ── OpenAI GPT Image (paid) ─────────────────────────────────────────────────
 
-OPENAI_IMAGE_MODEL = "gpt-image-2.5-sunburst"  # precise prompt-following; same token price as -flare (faster)
+OPENAI_IMAGE_MODEL = "gpt-image-2.5-flare"  # OpenAI's everyday image model (replaces DALL·E 3)
 
 
 def _generate_openai_image(settings: AppSettings, prompt: str, target: Path) -> None:
