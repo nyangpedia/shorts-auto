@@ -5,60 +5,32 @@ import { Subtitles } from "./Subtitles";
 import { TitleOverlay } from "./TitleOverlay";
 import type { ShortsProps } from "./types";
 
-const resolveMediaSrc = (src: string | undefined | null): string | undefined => {
+/** Paths in the props are relative to the project folder (Remotion's public dir); URLs pass through. */
+const asset = (src?: string | null): string | undefined => {
   if (!src) return undefined;
-  if (src.startsWith("http://") || src.startsWith("https://") || src.startsWith("data:")) {
-    return src;
-  }
-  const cleaned = src.replace(/^[./\\]+/, "");
-  return staticFile(cleaned);
+  if (/^(https?:|data:)/.test(src)) return src;
+  return staticFile(src.replace(/^[./\\]+/, ""));
 };
 
-export const ShortsComposition: React.FC<ShortsProps> = ({
-  videoSrc,
-  audioSrc,
-  bgmSrc,
-  bgmVolume = 0.15,
-  subtitles,
-  title,
-  sceneStarts = [],
-}) => {
+// Layers, back to front: scene video (with a punch-in on cuts), narration + BGM, cut flash and
+// progress bar, subtitles, then the 0–2 s opening title.
+export const ShortsComposition: React.FC<ShortsProps> = ({ videoSrc, audioSrc, bgmSrc, bgmVolume = 0.15, subtitles, title, sceneStarts = [] }) => {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
   const punch = useScenePunch(sceneStarts, frame, fps);
-  const resolvedVideo = resolveMediaSrc(videoSrc);
-  const resolvedAudio = resolveMediaSrc(audioSrc);
-  const resolvedBgm = resolveMediaSrc(bgmSrc);
+  const video = asset(videoSrc);
+  const narration = asset(audioSrc);
+  const music = asset(bgmSrc);
 
   return (
-    <AbsoluteFill style={{ backgroundColor: "#000000" }}>
-      {/* 1. 비디오 배경 레이어 (9:16 Portrait - OffthreadVideo로 완벽한 프레임 연속성 보장) */}
-      {resolvedVideo ? (
-        <OffthreadVideo
-          src={resolvedVideo}
-          style={{
-            width: "100%",
-            height: "100%",
-            objectFit: "cover",
-            transform: `scale(${punch})`,
-          }}
-        />
-      ) : null}
-
-      {/* 2. 성우 나레이션 오디오 레이어 (1.2배속 음성 원본 볼륨 100%) */}
-      {resolvedAudio ? <Audio src={resolvedAudio} volume={1.0} /> : null}
-
-      {/* 3. 채널 BGM 레이어 (배경음악 볼륨 조절 및 루프) */}
-      {resolvedBgm ? <Audio src={resolvedBgm} volume={bgmVolume} loop /> : null}
-
+    <AbsoluteFill style={{ backgroundColor: "#000" }}>
+      {video ? <OffthreadVideo src={video} style={{ width: "100%", height: "100%", objectFit: "cover", transform: `scale(${punch})` }} /> : null}
+      {narration ? <Audio src={narration} volume={1} /> : null}
+      {music ? <Audio loop src={music} volume={bgmVolume} /> : null}
       <SceneCutFlash sceneStarts={sceneStarts} />
       <ProgressBar />
-
-      {/* 4. 고화질 볼드 숏폼 자막 레이어 */}
       <Subtitles subtitles={subtitles} />
-
-      {/* 5. 0~2초 오프닝 타이틀 오버레이 레이어 */}
-      <TitleOverlay title={title} />
+      <TitleOverlay title={title ?? undefined} />
     </AbsoluteFill>
   );
 };
