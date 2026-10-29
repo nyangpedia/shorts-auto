@@ -10,7 +10,7 @@ export const IMAGE_MODELS: readonly ModelChoice[] = [
   { id: "gpt_image_2", name: "GPT Image 2 (Higgsfield)", free: false },
   { id: "seedream_v5_pro", name: "Seedream 5.0 Pro (Higgsfield)", free: false },
   { id: "gemini_image", name: "Gemini 이미지", free: false },
-  { id: "gpt_image", name: "GPT Image 2.5 (OpenAI)", free: false }
+  { id: "gpt_image", name: "GPT Image 2.5 Sunburst (OpenAI)", free: false }
 ];
 
 export const VIDEO_MODELS: readonly ModelChoice[] = [

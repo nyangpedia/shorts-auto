@@ -65,7 +65,7 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 
 ## 집 PC로 이어가기 (2026-10-29 기준 계획)
 - 코드는 GitHub(`mine` = nyangpedia/shorts-auto, `free-api-migration`)에 다 있음. 위 "새 PC 준비" 순서대로 설치
-- **git에 없는 것 2가지는 따로 옮길 것:** `apps/api/.env`(키), `outputs/`(프로젝트, ~740MB)
+- **git에 없는 것 2가지는 따로 옮길 것:** `.env`(저장소 최상위 폴더, 키), `outputs/`(프로젝트, ~740MB)
   → 구글 드라이브/USB. 두 PC에서 **동시에 같은 프로젝트를 열지 말 것**(덮어쓰기)
 - 첫 실행 때 깊이 모델(~100MB)·Whisper 모델이 자동 다운로드됨
 - 회원 관리(Supabase): 사용자의 블로그 자동화 앱 "글모아"와 **같은 Supabase 프로젝트 공유** 방향.
