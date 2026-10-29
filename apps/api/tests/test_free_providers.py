@@ -181,3 +181,29 @@ def test_kenburns_moves_rotate_without_repeating_neighbors():
     moves = [_kenburns_motion(i, 150) for i in range(1, 11)]
     assert all(a != b for a, b in zip(moves, moves[1:]))
     assert moves[0] == moves[5]
+
+
+def test_cloudflare_quota_reply_stops_and_marks_the_meter(tmp_path, monkeypatch):
+    import httpx
+    import pytest
+    from types import SimpleNamespace
+
+    from app.core import usage
+    from app.production import images
+
+    usage.configure(tmp_path)
+    calls = []
+
+    def fake_post(url, **kwargs):
+        calls.append(url.rsplit("/", 1)[-1])
+        return httpx.Response(429, json={"errors": [{"code": 4006, "message": "used up your daily free allocation"}], "success": False})
+
+    monkeypatch.setattr(images.httpx, "post", fake_post)
+    settings = SimpleNamespace(cloudflare_account_id="a", cloudflare_api_token="t")
+    with pytest.raises(images.ImageQuotaExhausted, match="70장"):
+        images._generate_cloudflare_image(settings, "a red apple", tmp_path / "x.png")
+    assert calls == ["flux-2-klein-4b"]  # no retries, no fallback model: same allowance
+    assert usage.exhausted("image")
+
+    usage.record("image")  # the next success clears it
+    assert not usage.exhausted("image")

@@ -402,14 +402,17 @@ export default function App() {
   }
 
   // ── 5 scenes (per-scene work runs in parallel, outside the global lock) ──
-  async function sceneTask(task: (id: string) => Promise<unknown>) {
+  /** true when the task worked, so a scene-by-scene batch can stop at the first failure. */
+  async function sceneTask(task: (id: string) => Promise<unknown>): Promise<boolean> {
     const id = projectId;
-    if (!id) return;
+    if (!id) return false;
     try {
       await task(id);
       if (onScreen(id)) setError(null);
+      return true;
     } catch (reason) {
       setError(errorText(reason, "씬 작업에 실패했습니다."));
+      return false;
     } finally {
       await loadProduction(id).catch(() => undefined);
       refreshUsage();
@@ -728,14 +731,14 @@ export default function App() {
 function UsageMeter({ usage }: { readonly usage: UsageToday }) {
   const rows = [
     ["대본 AI (Gemini)", usage.llm, usage.llm_limit],
-    ["이미지 (Cloudflare)", usage.image, usage.image_limit]
+    ["이미지 (Cloudflare)", usage.image_exhausted && usage.image_limit ? usage.image_limit : usage.image, usage.image_limit]
   ] as const;
   return (
-    <div className="quota" title="앱이 직접 센 추정치입니다. Gemini는 미국 서부 자정, Cloudflare는 UTC 자정에 초기화됩니다.">
+    <div className="quota" title="앱이 직접 센 추정치입니다. Gemini는 미국 서부 자정에 초기화됩니다. Cloudflare는 지난 24시간 사용량으로 막기 때문에, 한도 소진 표시는 다음 이미지가 성공할 때까지 유지됩니다.">
       <div>오늘 무료 사용량 (추정)</div>
       {rows.map(([label, used, limit]) => (
         <div className="quota-row" key={label}>
-          <div>{label}<span style={{ float: "right" }}>{limit ? `${used} / ${limit}` : used}</span></div>
+          <div>{label}<span style={{ float: "right" }}>{label.startsWith("이미지") && usage.image_exhausted ? "한도 소진" : limit ? `${used} / ${limit}` : used}</span></div>
           {limit ? (
             <div className="meter"><i className={used / limit > 0.85 ? "low" : ""} style={{ width: `${Math.min(100, (used / limit) * 100)}%` }} /></div>
           ) : null}

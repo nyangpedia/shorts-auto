@@ -217,6 +217,7 @@ export interface UsageToday {
   readonly llm_limit: number | null;
   readonly image: number;
   readonly image_limit: number | null;
+  readonly image_exhausted?: boolean; // Cloudflare itself said the free allowance is used up
   readonly tts: number;
 }
 

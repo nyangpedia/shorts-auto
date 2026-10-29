@@ -38,10 +38,24 @@ def _post_cloudflare(settings: AppSettings, model: str, attempts: int = 3, **req
             # A stalled model rarely recovers within seconds; let the caller fall back instead of waiting 3x.
             logger.warning("Cloudflare %s timed out", model)
             return None
-        if resp.status_code not in CLOUDFLARE_RETRY_STATUSES or attempt == attempts - 1:
+        if resp.status_code not in CLOUDFLARE_RETRY_STATUSES or attempt == attempts - 1 or _quota_exhausted(resp):
             break
         time.sleep(2 * (attempt + 1))
     return resp
+
+
+class ImageQuotaExhausted(RuntimeError):
+    """Cloudflare said the free allowance is used up: every further picture today would fail the same way."""
+
+
+def _quota_exhausted(resp: httpx.Response | None) -> bool:
+    """Code 4006 is "daily free allocation used up". Other 429s are short rate limits worth retrying."""
+    if resp is None or resp.status_code != 429:
+        return False
+    try:
+        return any(e.get("code") == 4006 for e in resp.json().get("errors", []))
+    except ValueError:
+        return False
 
 
 def _succeeded(resp: httpx.Response | None) -> bool:
@@ -58,6 +72,8 @@ def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path)
         "@cf/black-forest-labs/flux-2-klein-4b",
         files={"prompt": (None, f"{prompt[:1900]}, vertical composition"), "width": (None, "768"), "height": (None, "1344")},
     )
+    if _quota_exhausted(resp):
+        _report_exhausted()
     if not _succeeded(resp):
         logger.warning("FLUX.2 klein failed (%s); falling back to flux-1-schnell", resp.status_code if resp else "timeout")
         resp = _post_cloudflare(
@@ -68,11 +84,20 @@ def _generate_cloudflare_image(settings: AppSettings, prompt: str, target: Path)
         )
     if resp is None:
         raise RuntimeError("Cloudflare 이미지 서버가 응답하지 않습니다. 잠시 후 다시 시도해주세요.")
+    if _quota_exhausted(resp):
+        _report_exhausted()
     if resp.status_code == 429:
-        raise RuntimeError("오늘 Cloudflare 무료 이미지 한도를 다 썼습니다. 한국 시간 오전 9시(UTC 자정)에 다시 채워집니다.")
+        raise RuntimeError("Cloudflare 요청이 잠깐 몰렸습니다. 1분쯤 뒤 다시 시도해주세요.")
     resp.raise_for_status()
     target.write_bytes(base64.b64decode(resp.json()["result"]["image"]))
     usage.record("image")
+
+
+def _report_exhausted():
+    usage.mark_exhausted("image")
+    raise ImageQuotaExhausted(
+        "Cloudflare 무료 이미지 한도(하루 약 70장)를 다 썼습니다. Cloudflare는 지난 24시간 사용량으로 계산해서, "
+        "어제 많이 만든 시간대가 지나면 다시 풀립니다.")
 
 
 # ── Gemini image (free tier where available) ───────────────────────────────

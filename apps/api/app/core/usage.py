@@ -39,7 +39,23 @@ def record(kind: str) -> None:
         day = _day(kind)
         counts = data.get(kind, {})
         data[kind] = {day: counts.get(day, 0) + 1}  # keep only the current day
+        data.pop(f"{kind}_exhausted", None)  # it worked, so the provider's allowance is back
         _path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def mark_exhausted(kind: str) -> None:
+    """The provider itself said the free allowance is gone. Our day count can't see that (Cloudflare seems
+    to count a rolling 24 h, not the calendar day), so remember it until the next success."""
+    if _path is None:
+        return
+    with _lock:
+        data = _load()
+        data[f"{kind}_exhausted"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
+        _path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def exhausted(kind: str) -> bool:
+    return bool(_load().get(f"{kind}_exhausted"))
 
 
 def today() -> dict[str, int]:

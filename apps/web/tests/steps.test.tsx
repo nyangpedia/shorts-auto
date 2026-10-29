@@ -105,7 +105,7 @@ describe("ScriptStep similarity", () => {
 describe("ScenesStep", () => {
   it("makes videos only for scenes that have an image but no video", async () => {
     const user = userEvent.setup();
-    const onGenerateVideo = vi.fn().mockResolvedValue(undefined);
+    const onGenerateVideo = vi.fn().mockResolvedValue(true);
     render(
       <ScenesStep
         isBusy={false}
@@ -123,6 +123,27 @@ describe("ScenesStep", () => {
     await user.click(screen.getByRole("button", { name: "남은 영상 1개 만들기" }));
     await waitFor(() => expect(onGenerateVideo).toHaveBeenCalledTimes(1));
     expect(onGenerateVideo).toHaveBeenCalledWith(2, "parallax");
+  });
+
+  it("starts drawing a fresh plan by itself and stops at the first failure", async () => {
+    const onGenerateImage = vi.fn().mockResolvedValueOnce(true).mockResolvedValueOnce(false);  // 2nd: quota used up
+    const fresh = [1, 2, 3].map((id) => ({ ...scene(id, false, false), start_image_prompt: `fresh ${id}` }));
+    render(
+      <ScenesStep
+        isBusy={false}
+        onChangeStyle={vi.fn()}
+        onGenerateAllImages={vi.fn()}
+        onGenerateImage={onGenerateImage}
+        onGenerateVideo={vi.fn()}
+        onRegenerate={vi.fn()}
+        onUpdatePrompts={vi.fn()}
+        scenes={fresh}
+        styleId="claymation"
+      />
+    );
+    await waitFor(() => expect(onGenerateImage).toHaveBeenCalledTimes(2));
+    expect(onGenerateImage.mock.calls.map((c) => c[0])).toEqual([1, 2]);  // scene 3 never tried
+    await waitFor(() => expect(screen.getByRole("button", { name: "이미지 전부 만들기" })).toBeEnabled());
   });
 
   it("shows the applied style and re-plans scenes only after confirming a change", async () => {

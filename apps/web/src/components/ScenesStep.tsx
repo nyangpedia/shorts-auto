@@ -4,6 +4,10 @@ import { IMAGE_MODELS, VIDEO_MODELS, VISUAL_STYLES, modelLabel } from "../models
 import type { VideoSceneItem } from "../types";
 import { StylePicker } from "./StylePicker";
 
+// Scene sets whose pictures were started automatically this session (keyed by their prompts), so
+// coming back to the step after a failure doesn't fire the same batch again.
+const autoStarted = new Set<string>();
+
 interface ScenesStepProps {
   readonly scenes: readonly VideoSceneItem[];
   readonly isBusy: boolean;
@@ -11,11 +15,11 @@ interface ScenesStepProps {
   /** Style the current scenes were planned in; changing it re-plans the scenes (and clears their pictures). */
   readonly styleId: string | null;
   readonly onChangeStyle: (styleId: string) => void;
-  readonly onGenerateImage: (sceneId: number, model: string) => Promise<void>;
-  readonly onGenerateAllImages: (model: string) => Promise<void>;
-  readonly onGenerateVideo: (sceneId: number, model: string) => Promise<void>;
-  readonly onRegenerate: (sceneId: number, feedback: string, target: "image" | "video", model: string) => Promise<void>;
-  readonly onUpdatePrompts: (sceneId: number, imagePrompt: string, videoPrompt: string) => Promise<void>;
+  readonly onGenerateImage: (sceneId: number, model: string) => Promise<boolean>;
+  readonly onGenerateAllImages: (model: string) => Promise<unknown>;
+  readonly onGenerateVideo: (sceneId: number, model: string) => Promise<boolean>;
+  readonly onRegenerate: (sceneId: number, feedback: string, target: "image" | "video", model: string) => Promise<unknown>;
+  readonly onUpdatePrompts: (sceneId: number, imagePrompt: string, videoPrompt: string) => Promise<unknown>;
 }
 
 export function ScenesStep(props: ScenesStepProps) {
@@ -38,13 +42,23 @@ export function ScenesStep(props: ScenesStepProps) {
     setFeedback("");
   }, [selected?.scene_id, selected?.start_image_prompt, selected?.video_prompt]);
 
-  if (scenes.length === 0) {
-    return <p className="empty">음성·화풍 단계에서 씬을 먼저 구성해주세요.</p>;
-  }
-
   const withImage = scenes.filter((s) => s.start_image_url).length;
   const withVideo = scenes.filter((s) => s.generated_video_url).length;
   const busy = isBusy || batch !== null;
+
+  // A fresh scene plan with no pictures yet: start drawing as soon as the step opens (free model only).
+  const sceneKey = scenes.map((s) => s.start_image_prompt).join("|");
+  useEffect(() => {
+    if (!scenes.length || withImage || busy || autoStarted.has(sceneKey)) return;
+    if (!IMAGE_MODELS.find((m) => m.id === imageModel)?.free) return;
+    autoStarted.add(sceneKey);
+    void missingImages();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sceneKey]);
+
+  if (scenes.length === 0) {
+    return <p className="empty">음성·화풍 단계에서 씬을 먼저 구성해주세요.</p>;
+  }
 
   function changeStyle(next: string) {
     if (next === props.styleId) return;
@@ -57,7 +71,7 @@ export function ScenesStep(props: ScenesStepProps) {
   }
   const media = (url: string | null) => (url ? `${url}${url.includes("?") ? "&" : "?"}v=${version}` : undefined);
 
-  async function run(sceneId: number, task: () => Promise<void>) {
+  async function run(sceneId: number, task: () => Promise<unknown>) {
     setWorking((w) => ({ ...w, [sceneId]: true }));
     try {
       await task();
@@ -65,6 +79,19 @@ export function ScenesStep(props: ScenesStepProps) {
       setWorking((w) => ({ ...w, [sceneId]: false }));
       setVersion(Date.now());
     }
+  }
+
+  /** One scene at a time, so progress shows and the first failure (e.g. quota used up) stops the rest. */
+  async function missingImages() {
+    const todo = scenes.filter((s) => !s.start_image_url);
+    for (const [i, scene] of todo.entries()) {
+      setBatch(`이미지 만드는 중… ${i + 1}/${todo.length}`);
+      setSelectedId(scene.scene_id);
+      let done = false;
+      await run(scene.scene_id, async () => { done = await props.onGenerateImage(scene.scene_id, imageModel); });
+      if (!done) break;
+    }
+    setBatch(null);
   }
 
   async function allImages() {
@@ -81,7 +108,9 @@ export function ScenesStep(props: ScenesStepProps) {
     const todo = scenes.filter((s) => s.start_image_url && !s.generated_video_url);
     for (const [i, scene] of todo.entries()) {
       setBatch(`영상 만드는 중… ${i + 1}/${todo.length}`);
-      await run(scene.scene_id, () => props.onGenerateVideo(scene.scene_id, videoModel));
+      let done = false;
+      await run(scene.scene_id, async () => { done = await props.onGenerateVideo(scene.scene_id, videoModel); });
+      if (!done) break;
     }
     setBatch(null);
   }
@@ -110,7 +139,13 @@ export function ScenesStep(props: ScenesStepProps) {
         <span className="spacer" />
         <span className={`chip ${withImage === scenes.length ? "ok" : "warn"}`}>이미지 {withImage}/{scenes.length}</span>
         <span className={`chip ${withVideo === scenes.length ? "ok" : "warn"}`}>영상 {withVideo}/{scenes.length}</span>
-        <button className="btn" disabled={busy} onClick={allImages} type="button">{withImage ? "이미지 전부 다시" : "이미지 전부 만들기"}</button>
+        {withImage < scenes.length ? (
+          <button className="btn" disabled={busy} onClick={() => void missingImages()} type="button">
+            {withImage ? `남은 이미지 ${scenes.length - withImage}개 만들기` : "이미지 전부 만들기"}
+          </button>
+        ) : (
+          <button className="btn" disabled={busy} onClick={allImages} type="button">이미지 전부 다시</button>
+        )}
         <button className="btn primary" disabled={busy || withImage === withVideo} onClick={missingVideos} type="button">
           남은 영상 {Math.max(0, withImage - withVideo)}개 만들기
         </button>

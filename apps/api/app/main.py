@@ -24,10 +24,10 @@ from app.topics.router import create_topics_router
 from app.uploads.router import create_uploads_router
 
 WEB_ORIGINS = ["http://127.0.0.1:5173", "http://localhost:5173"]  # the Vite dev server
-# Free-tier caps observed in 2026-10: ~20 requests/day per Gemini model; Workers AI's 10k daily
-# neurons ≈ 95 FLUX.2 klein pictures at 768x1344.
+# Free-tier caps observed in 2026-10: ~20 requests/day per Gemini model; Workers AI's 10k daily neurons
+# went on 78 pictures (11.16k neurons, retries and fallbacks included), so about 70 a day.
 GEMINI_DAILY_PER_MODEL = 20
-CLOUDFLARE_DAILY_IMAGES = 95
+CLOUDFLARE_DAILY_IMAGES = 70
 
 
 def create_app(
@@ -76,6 +76,7 @@ def create_app(
             "llm_limit": GEMINI_DAILY_PER_MODEL * (1 + len(settings.llm_fallback_list)) if on_gemini else None,
             "image": counts["image"],
             "image_limit": CLOUDFLARE_DAILY_IMAGES if settings.cloudflare_account_id else None,
+            "image_exhausted": usage.exhausted("image"),
             "tts": counts["tts"],
         }
 
