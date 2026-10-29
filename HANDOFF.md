@@ -13,7 +13,7 @@
 | 자막/STT | Faster-Whisper (CPU, base) | `av<18` 고정 필수 |
 | 대본/분석 | Gemini `gemini-3.5-flash` | 무료 한도 **모델당 하루 ~20회**(영상 1편에 5~6회) → `LLM_FALLBACK_MODELS` 순서로 자동 전환 |
 | 음성 | Gemini TTS `gemini-3.8-flash-tts`, 음성 Kore | edge / qwen3도 선택 가능 (`TTS_PROVIDER`) |
-| 이미지 | `cloudflare` (Workers AI FLUX schnell, 하루 ~200장) | 정사각형 출력 → 9:16로 크롭. 일시적 400은 자동 재시도 |
+| 이미지 | `cloudflare` (Workers AI FLUX schnell, **하루 약 70장**, 24시간 롤링 — 대시보드 0이어도 429 code 4006이면 소진) | 정사각형 출력 → 9:16로 크롭. 일시적 400은 자동 재시도 |
 | 화풍 | 7종 선택 (`app/production/styles.py`) | 제작 패널 "화풍" + [씬 구성하기]. 기본값 `VISUAL_STYLE` |
 | 영상 | `parallax` 2.5D 입체 모션(기본, 깊이 모델 Depth Anything V2 small) 또는 `kenburns` + HyperFrames 모션그래픽 | 씬 전환 펀치줌·플래시, 자막 숫자 노란 강조, 상단 진행 바 |
 | 렌더링 | HyperFrames 0.8.214 (`apps/video/shorts.html`, WAAPI 애니메이션, 텔레메트리 끔) | 50초 영상 약 5분(CPU) |
@@ -54,13 +54,31 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 사용량 추정 `/api/usage` (outputs/_usage.json), 왼쪽 아래 표시
 - 예전 패널 전부 삭제(ProductionPanel 2천 줄 등). API 키 상태 화면(SettingsPanel)도 같이 빠짐
 
+## 2026-10-29 작업
+- 렌더러 Remotion → HyperFrames (SSIM 0.984로 동등 확인). 정지 이미지는 2.5D 패럴랙스로 움직임
+- 말소리 없는 레퍼런스: 저화질로 받아 프레임 24장을 Gemini가 읽어 대본 대신 사용 (`references/screen.py`)
+- 썸네일 만들기, 유튜브 **수동 업로드 도우미**(파일 준비+폴더 열기, 제목·설명·태그 복사).
+  API 자동 업로드는 미인증 앱이면 비공개로 잠겨서 보류 (YouTube 감사 통과 후)
+- 화풍 고르면 이미지 자동 생성, Cloudflare 한도 소진 표시 동기화
+- 장면 나누기: 22자 넘으면 조사·어미 뒤에서 자르고 "것·수·때"는 앞말에 붙임 (`scenes.py`, 사용자 요청)
+- 오늘의 레퍼런스 키워드: 만약에 지구/과학, what if earth/science, もしも 地球/科学
+
+## 집 PC로 이어가기 (2026-10-29 기준 계획)
+- 코드는 GitHub(`mine` = nyangpedia/shorts-auto, `free-api-migration`)에 다 있음. 위 "새 PC 준비" 순서대로 설치
+- **git에 없는 것 2가지는 따로 옮길 것:** `apps/api/.env`(키), `outputs/`(프로젝트, ~740MB)
+  → 구글 드라이브/USB. 두 PC에서 **동시에 같은 프로젝트를 열지 말 것**(덮어쓰기)
+- 첫 실행 때 깊이 모델(~100MB)·Whisper 모델이 자동 다운로드됨
+- 회원 관리(Supabase): 사용자의 블로그 자동화 앱 "글모아"와 **같은 Supabase 프로젝트 공유** 방향.
+  집 PC에 글모아 코드가 있으니 거기서 로그인·이용권 확인·자동 업데이트 방식을 읽고 설계할 것.
+  service_role 키는 앱에 절대 넣지 않음(anon 키 + URL만). 설치 파일은 Supabase 저장소 말고 GitHub Releases (무료 egress 5GB/월)
+  — 단, **영상 20~30편 올려 반응 보기 전엔 착수 보류** 권장
+
 ## 다음 할 일 (우선순위 순)
-1. **사용자가 새 화면으로 한 편 끝까지 만들어 보기** — 화면은 캡처·단위 테스트로만 확인함. 실제 클릭 흐름 검증 필요
-2. **이미지 잘림 조정** — 정사각형→9:16 크롭 + kenburns 줌으로 양옆 손실. (a) 줌 폭 축소 (b) 프롬프트에 "피사체 중앙" 추가가 최소 수정
-3. **설치형 배포 준비** — 원작자 LICENSE 받기 → NOTICE(크레딧), 원클릭 실행 스크립트, 설치 안내서,
-   **API 키 입력 화면**(지금은 .env 직접 편집 — 배포 시 필수)
-4. 2~3편 실제 업로드 → 시청 지속률 보고 다음 개선 결정
-5. 다크 모드 (아직 없음)
+1. **첫 영상 완성 → 수동 업로드** — 통근열차(`261029_1213`), 우주정거장 눈물(`261029_1211`): 이미지 한도 풀리면 이미지 → 렌더
+2. 결정 대기: 레터박스(위아래 검은 바에 제목·자막) vs 꽉 찬 화면 — 해설형은 레터박스 추천, 사용자 미정. 2.5D 움직임 세기 피드백
+3. 2~3편 업로드 후 시청 지속률 보고 다음 개선 결정
+4. **설치형 배포 준비** — NOTICE(크레딧), 원클릭 실행, 설치 안내서, README·manual 재작성(아직 원작자 글), 개인정보처리방침
+5. 보류: 화풍 샘플 이미지, 모션그래픽 템플릿, OAuth 읽기 전용 분석, 다크 모드
 
 ## 결정·조사 기록
 - 추천 주제 5개: 레퍼런스와 **같은 분야, 서로 다른 각도**로 변경 완료 (`analysis.py`)
