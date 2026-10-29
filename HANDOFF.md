@@ -73,6 +73,12 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
   service_role 키는 앱에 절대 넣지 않음(anon 키 + URL만). 설치 파일은 Supabase 저장소 말고 GitHub Releases (무료 egress 5GB/월)
   — 단, **영상 20~30편 올려 반응 보기 전엔 착수 보류** 권장
 
+## 2026-10-29 회원 로그인 (1단계: 화면만)
+- 글모아와 **같은 Supabase 프로젝트·같은 계정**으로 로그인 (`apps/web/src/components/LoginGate.tsx`, `src/supabase.ts`).
+  `.env`의 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`(공개 값, 글모아 `.env.local`의 NEXT_PUBLIC_* 와 같은 값)가 비어 있으면 로그인 없이 열림. `vite.config.ts`의 `envDir`이 저장소 최상위 `.env`를 읽음
+- **아직 없음**: 회원가입(글모아 DB 트리거가 약관 동의 메타데이터 없으면 가입 거부 → 쇼츠공방 약관을 먼저 정해야 함), 서버 쪽 토큰 검증(지금은 화면에서만 막음), 하루 한도, 구글 로그인, 비밀번호 재설정
+- 다음 설계: 계정은 하나, 이용권은 앱별 표(예: `shorts_members`: 기간·요금제·하루 영상 한도)로 분리. 글모아 `members` 표는 건드리지 않음. DB 변경 SQL은 Supabase SQL Editor에 사용자가 직접 붙여 넣어야 함(글모아 때 자동 적용이 막혔음). 글모아 참고 코드: `G:\블로그자동화\블로그자동화` 의 `lib/member.ts`, `supabase/migrations/0001·0006`, `components/MemberGate.tsx`
+
 ## 다음 할 일 (우선순위 순)
 1. **첫 영상 완성 → 수동 업로드** — 통근열차(`261029_1213`), 우주정거장 눈물(`261029_1211`): 이미지 한도 풀리면 이미지 → 렌더
 2. 레이아웃: **꽉 찬 화면 유지** (2026-10-29 결정 — 레터박스+노란 제목 틀은 양산형·재업로드 채널처럼 보일 위험). 2.5D 움직임 세기 피드백 대기

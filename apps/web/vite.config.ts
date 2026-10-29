@@ -3,6 +3,7 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   plugins: [react()],
+  envDir: "../..", // read the repo-root .env (only VITE_* values reach the browser)
   server: {
     proxy: {
       "/api": {
