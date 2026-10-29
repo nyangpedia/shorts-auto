@@ -129,5 +129,8 @@ export const fetchYouTubeStatus = () => get<YouTubeStatus>("/api/youtube/status"
 export const fetchYouTubeAuthUrl = () => get<{ auth_url: string }>("/api/youtube/connect");
 export const saveClientSecret = (content: string) => put<YouTubeStatus>("/api/youtube/client-secret", { content });
 export const disconnectYouTube = () => call<YouTubeStatus>("DELETE", "/api/youtube/connection");
+/** Copies the video (and thumbnail) under the title into the project's 업로드 folder and opens it. */
+export const prepareUploadFiles = (projectId: string, title: string) =>
+  post<{ folder: string; files: string[] }>(p(projectId, "/upload-files"), { title });
 export const uploadToYouTube = (projectId: string, payload: { title: string; description: string; tags: string }) =>
   post<YouTubeUploadResult>(p(projectId, "/youtube/upload"), payload);

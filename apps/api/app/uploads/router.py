@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import shutil
 from pathlib import Path
 from typing import Callable
 from urllib.parse import urlencode
@@ -35,6 +36,28 @@ THUMBNAIL_URL = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
 
 class ClientSecretRequest(BaseModel):
     content: str = Field(max_length=20_000)
+
+
+class UploadFilesRequest(BaseModel):
+    title: str = Field(default="", max_length=100)
+
+
+def safe_filename(title: str) -> str:
+    """A title as a Windows/macOS-safe file name (YouTube suggests the file name as the video title)."""
+    name = re.sub(r'[<>:"/\\|?*\x00-\x1f]', "", title).strip().rstrip(".")
+    return name[:80] or "shorts"
+
+
+def open_folder(folder: Path) -> None:
+    """Show the folder in the file manager of the PC running the app (the API only listens on 127.0.0.1)."""
+    import os
+    import subprocess
+    import sys
+
+    if sys.platform == "win32":
+        os.startfile(folder)  # noqa: S606 - a local folder we just wrote
+    else:
+        subprocess.Popen(["open" if sys.platform == "darwin" else "xdg-open", str(folder)])
 
 
 class UploadRequest(BaseModel):
@@ -120,6 +143,29 @@ def create_uploads_router(
             return HTMLResponse("<h3>refresh token 을 받지 못했습니다. 구글 계정의 앱 권한을 지우고 다시 연결하세요.</h3>", status_code=400)
         (repo_root / TOKEN_FILE).write_text(json.dumps({"refresh_token": tokens["refresh_token"]}), encoding="utf-8")
         return HTMLResponse("<h3>연결됐습니다. 이 창을 닫고 쇼츠공방으로 돌아가세요.</h3>")
+
+    @router.post("/api/projects/{project_id}/upload-files")
+    def upload_files(project_id: str, payload: UploadFilesRequest, outputs: Path = Depends(outputs_dir_provider)):
+        """Uploading by hand in YouTube Studio: the video (and thumbnail) copied under the title, folder opened.
+        API uploads from an unaudited Google project stay locked private, so this is the default path."""
+        try:
+            project = read_project(outputs, project_id)
+        except (FileNotFoundError, ValueError) as exc:
+            raise HTTPException(status_code=404, detail="Project not found") from exc
+        source = outputs / project_id
+        if not (source / "final.mp4").exists():
+            raise HTTPException(status_code=400, detail="final.mp4 영상이 아직 없습니다. 먼저 렌더링하세요.")
+        folder = source / "업로드"
+        shutil.rmtree(folder, ignore_errors=True)  # only this export's copies live here
+        folder.mkdir()
+        name = safe_filename(payload.title or project.project_title)
+        files = [f"{name}.mp4"]
+        shutil.copyfile(source / "final.mp4", folder / files[0])
+        if (source / "thumbnail.jpg").exists():
+            files.append(f"{name}_썸네일.jpg")
+            shutil.copyfile(source / "thumbnail.jpg", folder / files[1])
+        open_folder(folder)
+        return {"folder": str(folder), "files": files}
 
     @router.post("/api/projects/{project_id}/youtube/upload")
     def upload(project_id: str, payload: UploadRequest, outputs: Path = Depends(outputs_dir_provider)):

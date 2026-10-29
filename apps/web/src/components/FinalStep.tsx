@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fetchYouTubeAuthUrl, fetchYouTubeStatus, makeThumbnail, uploadToYouTube, type YouTubeStatus, type YouTubeUploadResult } from "../api";
+import { makeThumbnail, prepareUploadFiles } from "../api";
 import type { ScriptCandidate } from "../types";
 
 interface FinalStepProps {
@@ -13,7 +13,6 @@ interface FinalStepProps {
   readonly busyText: string | null;
   readonly onTitleChange: (title: string) => void;
   readonly onRender: (title: string) => void;
-  readonly onOpenSettings: () => void;
   readonly scenePictures: readonly { readonly id: number; readonly url: string }[];
   readonly thumbnailUrl: string | null;
 }
@@ -25,6 +24,11 @@ const CHECKS = [
   ["제목·설명·태그", "아래 추천을 그대로 쓰지 말고 영상에 맞게 고쳤나요?"]
 ] as const;
 
+/** Shorts descriptions carry #Shorts; add it once if the draft didn't. */
+const withShortsTag = (text: string) => (!text.trim() || /#shorts/i.test(text) ? text : `${text.trim()}\n\n#Shorts`);
+/** Studio's tag box takes comma-separated tags without '#'. */
+const studioTags = (raw: string) => raw.replace(/#/g, " ").split(/[\s,]+/).filter(Boolean).join(", ");
+
 function readChecks(projectId: string): boolean[] {
   try {
     const raw = localStorage.getItem(`checklist:${projectId}`);
@@ -35,16 +39,16 @@ function readChecks(projectId: string): boolean[] {
 }
 
 export function FinalStep(props: FinalStepProps) {
-  const { projectId, finalVideoUrl, candidate, videoTitle, scenesReady, isBusy, busyText, onTitleChange, onRender, onOpenSettings, scenePictures } = props;
+  const { projectId, finalVideoUrl, candidate, videoTitle, scenesReady, isBusy, busyText, onTitleChange, onRender, scenePictures } = props;
   const [checks, setChecks] = useState<boolean[]>(() => readChecks(projectId));
   const [title, setTitle] = useState(videoTitle);
   const [videoVersion, setVideoVersion] = useState(0);
-  const [yt, setYt] = useState<YouTubeStatus | null>(null);
-  const [description, setDescription] = useState(candidate?.description ?? "");
-  const [tags, setTags] = useState(candidate?.tags ?? "");
-  const [uploading, setUploading] = useState(false);
-  const [uploaded, setUploaded] = useState<YouTubeUploadResult | null>(null);
-  const [ytError, setYtError] = useState<string | null>(null);
+  const [uploadTitle, setUploadTitle] = useState(candidate?.title_options?.[0] ?? videoTitle);
+  const [description, setDescription] = useState(withShortsTag(candidate?.description ?? ""));
+  const [tags, setTags] = useState(studioTags(candidate?.tags ?? ""));
+  const [prepared, setPrepared] = useState<string | null>(null);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
   const [thumbScene, setThumbScene] = useState(1);
   const [thumbTitle, setThumbTitle] = useState(videoTitle);
   const [thumbUrl, setThumbUrl] = useState<string | null>(props.thumbnailUrl);
@@ -67,28 +71,21 @@ export function FinalStep(props: FinalStepProps) {
     }
   }
 
-  const loadYt = () => void Promise.resolve(fetchYouTubeStatus()).then((s) => setYt(s ?? null)).catch(() => setYt(null));
-  useEffect(loadYt, []);
-  useEffect(() => { setDescription(candidate?.description ?? ""); setTags(candidate?.tags ?? ""); setUploaded(null); }, [projectId, candidate]);
+  useEffect(() => {
+    setUploadTitle(candidate?.title_options?.[0] ?? videoTitle);
+    setDescription(withShortsTag(candidate?.description ?? ""));
+    setTags(studioTags(candidate?.tags ?? ""));
+    setPrepared(null);
+    setUploadError(null);
+  }, [projectId, candidate]);
 
-  async function connectYt() {
+  async function prepareFiles() {
+    setUploadError(null);
     try {
-      window.open((await fetchYouTubeAuthUrl()).auth_url, "_blank");
-      setYtError(null);
+      const made = await prepareUploadFiles(projectId, uploadTitle || videoTitle);
+      setPrepared(made.files.join(", "));
     } catch (reason) {
-      setYtError(reason instanceof Error ? reason.message : "연결하지 못했습니다.");
-    }
-  }
-
-  async function upload() {
-    setUploading(true);
-    setYtError(null);
-    try {
-      setUploaded(await uploadToYouTube(projectId, { title: title || videoTitle, description, tags }));
-    } catch (reason) {
-      setYtError(reason instanceof Error ? reason.message : "업로드에 실패했습니다.");
-    } finally {
-      setUploading(false);
+      setUploadError(reason instanceof Error ? reason.message : "파일을 준비하지 못했습니다.");
     }
   }
 
@@ -106,7 +103,10 @@ export function FinalStep(props: FinalStepProps) {
     }
   }
 
-  const copy = (value: string) => void navigator.clipboard?.writeText(value);
+  const copy = (value: string, what = value) => {
+    void navigator.clipboard?.writeText(value);
+    setCopied(what);
+  };
   const metas = [
     ...(candidate?.title_options ?? []).map((t) => ["제목", t]),
     ...(candidate?.tags ? [["태그", candidate.tags]] : []),
@@ -177,35 +177,32 @@ export function FinalStep(props: FinalStepProps) {
 
         {finalVideoUrl ? (
           <div className="card">
-            <div className="section-head"><h2>유튜브에 올리기</h2><p>항상 비공개로 올라갑니다. 스튜디오에서 확인 후 공개하세요.</p></div>
-            {ytError ? <div className="banner bad" role="alert">⚠️ {ytError}</div> : null}
-            {!yt?.configured ? (
-              <div className="row">
-                <span>유튜브 계정이 아직 연결되지 않았습니다.</span>
-                <button className="btn" onClick={onOpenSettings} type="button">설정에서 연결하기</button>
-              </div>
-            ) : !yt.connected ? (
-              <div className="row">
-                <button className="btn" onClick={() => void connectYt()} type="button">구글 계정 연결</button>
-                <button className="btn" onClick={loadYt} type="button">연결 확인</button>
-              </div>
-            ) : uploaded ? (
-              <div className="row">
-                <span className="chip ok">업로드 완료 (비공개)</span>
-                {uploaded.thumbnail_note ? <span className="hint">{uploaded.thumbnail_note}</span> : null}
-                <a className="btn" href={uploaded.studio_url} rel="noreferrer" target="_blank">스튜디오에서 열기 ↗</a>
-              </div>
-            ) : (
-              <>
-                <label className="field">설명<textarea className="input" onChange={(e) => setDescription(e.target.value)} rows={3} value={description} /></label>
-                <label className="field">태그<input className="input" onChange={(e) => setTags(e.target.value)} value={tags} /></label>
-                <div className="row">
-                  <button className="btn accent" disabled={uploading || !(title || videoTitle) || checks.filter(Boolean).length < CHECKS.length} onClick={() => void upload()} title="업로드 전 확인 4개를 모두 체크해야 합니다" type="button">
-                    {uploading ? "올리는 중…" : "비공개로 업로드"}
-                  </button>
-                </div>
-              </>
-            )}
+            <div className="section-head"><h2>유튜브에 올리기</h2><p>유튜브 스튜디오에서 직접 올립니다 (영상당 1분 정도)</p></div>
+            {uploadError ? <div className="banner bad" role="alert">⚠️ {uploadError}</div> : null}
+            <ol className="upload-steps">
+              <li>
+                <button className="btn" onClick={() => void prepareFiles()} type="button">파일 준비 + 폴더 열기</button>
+                <span className="hint">{prepared ? `준비됨: ${prepared}` : "영상과 썸네일을 제목 이름으로 복사합니다. 유튜브가 파일 이름을 제목으로 씁니다."}</span>
+              </li>
+              <li>
+                <a className="btn" href="https://www.youtube.com/upload" rel="noreferrer" target="_blank">유튜브 업로드 페이지 열기 ↗</a>
+                <span className="hint">영상 파일을 끌어다 놓으세요.</span>
+              </li>
+              <li>아래 칸을 하나씩 복사해 붙여 넣고, 썸네일을 올리세요. 실사처럼 보이는 장면이 있으면 "변경되었거나 합성된 콘텐츠"를 체크하세요.</li>
+            </ol>
+            {([
+              ["제목", uploadTitle, setUploadTitle, 1],
+              ["설명", description, setDescription, 4],
+              ["태그", tags, setTags, 1]
+            ] as const).map(([label, value, set, rows]) => (
+              <label className="field" key={label}>
+                <span>{label} <button className="btn small" onClick={(e) => { e.preventDefault(); copy(value, label); }} type="button">{copied === label ? "복사됨 ✓" : "복사"}</button>
+                  {label === "제목" ? <span className="hint"> {value.length}/100</span> : null}</span>
+                {rows > 1
+                  ? <textarea className="input" onChange={(e) => set(e.target.value)} rows={rows} value={value} />
+                  : <input className="input" maxLength={label === "제목" ? 100 : undefined} onChange={(e) => set(e.target.value)} value={value} />}
+              </label>
+            ))}
           </div>
         ) : null}
 

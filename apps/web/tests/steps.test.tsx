@@ -187,7 +187,6 @@ describe("FinalStep", () => {
       busyText: null,
       onTitleChange: vi.fn(),
       onRender: vi.fn(),
-      onOpenSettings: vi.fn(),
       scenePictures: [],
       thumbnailUrl: null
     };

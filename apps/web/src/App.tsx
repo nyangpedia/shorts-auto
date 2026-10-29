@@ -691,7 +691,6 @@ export default function App() {
                   candidate={scripts?.selected_candidate ?? null}
                   finalVideoUrl={production?.has_final_video ? production.final_video_url ?? `/api/projects/${encodeURIComponent(project.project_id)}/production/final-video` : null}
                   isBusy={busy !== null}
-                  onOpenSettings={() => setView("settings")}
                   onRender={handleRender}
                   onTitleChange={handleTitleChange}
                   projectId={project.project_id}

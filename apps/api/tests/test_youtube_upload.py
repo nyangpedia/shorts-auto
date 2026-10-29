@@ -50,3 +50,23 @@ def test_upload_goes_up_private_and_records_video_id(tmp_path: Path):
     again = client.post(f"/api/projects/{project_id}/youtube/upload", json={"title": "제목"})
     assert again.status_code == 200 and seen["thumbnail"] == "vid123"
     assert "썸네일" in again.json()["thumbnail_note"]
+
+
+def test_upload_files_are_named_after_the_title(tmp_path: Path, monkeypatch):
+    from app.uploads import router as uploads
+
+    opened = []
+    monkeypatch.setattr(uploads, "open_folder", opened.append)
+    client = TestClient(create_app(repo_root=tmp_path))
+    project_id = client.post("/api/projects", json={"project_title": "업로드"}).json()["project"]["project_id"]
+    url = f"/api/projects/{project_id}/upload-files"
+
+    assert client.post(url, json={"title": "t"}).status_code == 400  # nothing rendered yet
+
+    folder = tmp_path / "outputs" / project_id
+    (folder / "final.mp4").write_bytes(b"video")
+    (folder / "thumbnail.jpg").write_bytes(b"jpg")
+    made = client.post(url, json={"title": "만약 지구가 5초 멈추면? / 진짜:결과"}).json()
+    assert made["files"] == ["만약 지구가 5초 멈추면  진짜결과.mp4", "만약 지구가 5초 멈추면  진짜결과_썸네일.jpg"]
+    assert (folder / "업로드" / made["files"][0]).read_bytes() == b"video"
+    assert opened == [folder / "업로드"]
