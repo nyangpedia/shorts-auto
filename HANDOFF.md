@@ -81,5 +81,5 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - [x] 2단계 대본·분석 프롬프트 (`scripts/generation.py`, `references/analysis.py`) — A/B 완료: 새 쪽이 분량·정확성 기준을 더 잘 지킴
 - [x] 3단계 레퍼런스 (`references/router.py`, `youtube.py`, `files.py`, `audio.py`, `models.py`)
 - [x] 4단계 렌더러·제작 라우터·작업 기록·프로젝트·설정 (`production/renderer.py`, `production/router.py`, `production/models.py`, `jobs/*`, `projects/service.py`, `core/settings.py`, `main.py`)
-- [ ] 5단계 웹 `api.ts`, `types.ts`, 원작자 테스트
-- [ ] 6단계 `tools/higgsfield-mcp` (기능 유지, 코드 재작성)
+- [x] 5단계 웹 `api.ts`, `types.ts`, 원작자 테스트 전부 재작성(API 195개·웹 14개 통과). 안 쓰던 `/align`, `/pass-next` 삭제. App.tsx·App.test.tsx에 남은 원작자 줄은 괄호·import 이름·테스트 상투구뿐이라 유지
+- [x] 6단계 `tools/higgsfield-mcp` 삭제: 앱은 쓰지 않음(Codex/Gemini용 플러그인, 원작자 맥 경로 고정). 앱 안의 Higgsfield 이미지·영상 옵션은 그대로. `tools/dev/start-dev.mjs` 재작성: 윈도우에서 실제로 뜨게(이전엔 경로 비교 버그로 아무것도 안 켜짐), `--reload` 제거, pnpm 없어도 npm으로 웹 실행

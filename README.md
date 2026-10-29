@@ -19,7 +19,6 @@
   - [Step 1. 저장소 클론 및 패키지 설치](#step-1-저장소-클론-및-패키지-설치)
   - [Step 2. 환경 변수 설정 (.env)](#step-2-환경-변수-설정-env)
   - [Step 3. 로컬 에셋 파일 배치](#step-3-로컬-에셋-파일-배치)
-  - [Step 4. (선택) Higgsfield MCP 연동](#step-4-선택-higgsfield-mcp-연동)
 - [5. 프로젝트 실행 (Running)](#5-프로젝트-실행-running)
 - [6. 상세 사용 매뉴얼](#6-상세-사용-매뉴얼)
 - [7. 프로젝트 폴더 구조](#7-프로젝트-폴더-구조)
@@ -139,18 +138,6 @@ OUTPUT_DIR=outputs
 
 > 💡 파일명이 다른 경우 `.env`의 `REFERENCE_VOICE_PATH` 및 `BGM_PATH`를 원하는 파일명으로 수정하면 됩니다.
 
-### Step 4. (선택) Higgsfield MCP 연동
-AI 에이전트(Codex, Antigravity 등)에서 Higgsfield 도구를 직접 호출하려면 MCP 래퍼를 1회 등록합니다:
-```bash
-# Higgsfield CLI 설치 및 로그인
-npm i -g @higgsfield/cli
-higgsfield auth login
-higgsfield workspace set <workspace_id>
-
-# MCP 설정 파일 등록
-pnpm setup:higgsfield-mcp
-```
-
 ---
 
 ## 5. 프로젝트 실행 (Running)
@@ -204,9 +191,8 @@ shorts-auto/
 ├── config/                    # 설정 템플릿
 │   └── local.settings.example.json
 ├── outputs/                   # 프로젝트별 생성 결과물 (.gitignore로 파일 커밋 차단)
-├── tools/                     # 개발 및 MCP 도구 스크립트
-│   ├── dev/start-dev.mjs      # 백엔드/프론트엔드 동시 실행 런처
-│   └── higgsfield-mcp/        # Higgsfield Model Context Protocol 래퍼
+├── tools/                     # 개발 도구 스크립트
+│   └── dev/start-dev.mjs      # 백엔드/프론트엔드 동시 실행 런처
 ├── manual.md                  # 대시보드 상세 사용 가이드
 └── README.md                  # 프로젝트 개요 및 셋업 가이드
 ```
