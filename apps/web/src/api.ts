@@ -88,7 +88,7 @@ export const generateSceneImage = (projectId: string, sceneId: number, model = "
   post<ProductionState>(p(projectId, `/production/scenes/${sceneId}/image?${qs({ model })}`));
 export const generateAllSceneImages = (projectId: string, model = "cloudflare") =>
   post<ProductionState>(p(projectId, `/production/scenes/images?${qs({ model })}`));
-export const generateSceneVideo = (projectId: string, sceneId: number, model = "kenburns", duration = 5, multiShots = false, matchPrevFrame = true) =>
+export const generateSceneVideo = (projectId: string, sceneId: number, model = "parallax", duration = 5, multiShots = false, matchPrevFrame = true) =>
   post<ProductionState>(p(projectId, `/production/scenes/${sceneId}/video?${qs({ model, duration, multi_shots: multiShots, match_prev_frame: matchPrevFrame })}`));
 export const regenerateSceneWithFeedback = (
   projectId: string,

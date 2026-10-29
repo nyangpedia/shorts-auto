@@ -93,7 +93,7 @@ def refine_and_regenerate_scene(
         generate_scene_image_for_project(project_dir, scene_id, settings, model_name=model_name or "cloudflare")
     if target in ("video", "both"):
         generate_scene_video_for_project(
-            project_dir, scene_id, settings, model_name=model_name or "kenburns",
+            project_dir, scene_id, settings, model_name=model_name or "parallax",
             duration=duration, match_prev_frame=match_prev_frame,
         )
 

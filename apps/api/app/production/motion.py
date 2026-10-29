@@ -1,16 +1,20 @@
-"""Scene clips: a free Ken Burns move over the still, or a paid Higgsfield video model.
+"""Scene clips: a free 2.5D depth move or Ken Burns move over the still, or a paid Higgsfield video model.
 
 With "match previous frame", scene N starts from the last frame of scene N-1 and (on models that take
 an end frame) lands on scene N's own picture, so consecutive clips flow as one take.
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 from app.core.settings import AppSettings
 from app.production.images import HIGGSFIELD_ALIASES, download, higgsfield_run
 from app.production.media import _make_kenburns_video, grab_last_frame
+from app.production.parallax import make_parallax_video
 from app.production.paths import find_scene, load_scene_list, scene_asset
+
+log = logging.getLogger(__name__)
 
 _TAKES_END_FRAME = ("kling", "seedance", "minimax")
 
@@ -37,7 +41,7 @@ def generate_scene_video_for_project(
     project_dir: Path,
     scene_id: int,
     settings: AppSettings,
-    model_name: str = "kenburns",
+    model_name: str = "parallax",
     duration: int = 5,
     multi_shots: bool = False,  # accepted for API compatibility; single-prompt clips only
     match_prev_frame: bool = True,
@@ -50,7 +54,14 @@ def generate_scene_video_for_project(
     clip = scene_asset(project_dir, scene_id, "video")
     last_frame = scene_asset(project_dir, scene_id, "final")
 
-    if model == "kenburns":
+    if model == "parallax":
+        try:
+            make_parallax_video(scene_id, picture, clip, duration)
+        except Exception as exc:  # depth model download or run failed: a plain camera move still beats no clip
+            log.warning("2.5D move failed for scene %s, using the camera move instead: %s", scene_id, exc)
+            _make_kenburns_video(scene_id, picture, clip, duration)
+        start = picture
+    elif model == "kenburns":
         _make_kenburns_video(scene_id, picture, clip, duration)
         start = picture
     else:

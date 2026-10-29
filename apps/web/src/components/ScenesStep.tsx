@@ -21,7 +21,7 @@ interface ScenesStepProps {
 export function ScenesStep(props: ScenesStepProps) {
   const { scenes, isBusy } = props;
   const [imageModel, setImageModel] = useState("cloudflare");
-  const [videoModel, setVideoModel] = useState("kenburns");
+  const [videoModel, setVideoModel] = useState("parallax");
   const [selectedId, setSelectedId] = useState<number | null>(scenes[0]?.scene_id ?? null);
   const [working, setWorking] = useState<Record<number, boolean>>({});
   const [batch, setBatch] = useState<string | null>(null);

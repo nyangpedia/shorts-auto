@@ -14,7 +14,8 @@ export const IMAGE_MODELS: readonly ModelChoice[] = [
 ];
 
 export const VIDEO_MODELS: readonly ModelChoice[] = [
-  { id: "kenburns", name: "카메라 모션", free: true },
+  { id: "parallax", name: "2.5D 입체 모션", free: true },
+  { id: "kenburns", name: "카메라 모션 (빠름)", free: true },
   { id: "kling_o3_flf", name: "Kling 3.0 (Higgsfield)", free: false },
   { id: "minimax_h3", name: "Minimax H3 (Higgsfield)", free: false },
   { id: "grok_video_v15_lite", name: "Grok Imagine Lite (Higgsfield)", free: false },

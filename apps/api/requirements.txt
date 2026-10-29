@@ -12,4 +12,7 @@ faster-whisper>=1.0.0
 av<18
 edge-tts>=7.0.0
 google-genai>=2.33.0
-
+# 2.5D camera move: depth model (Depth Anything V2 small, ONNX) and frame warping
+onnxruntime>=1.18
+huggingface_hub>=0.23
+opencv-python-headless>=4.10

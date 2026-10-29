@@ -135,7 +135,7 @@ def create_production_router(outputs_dir_provider: Callable[[], Path], settings_
         return scene_work(project_id, outputs, draw_all)
 
     @router.post("/scenes/{scene_id}/video")
-    def generate_scene_video(project_id: str, scene_id: int, model: str = "kenburns", duration: int = 5, multi_shots: bool = False,
+    def generate_scene_video(project_id: str, scene_id: int, model: str = "parallax", duration: int = 5, multi_shots: bool = False,
                              match_prev_frame: bool = True, outputs: Path = Outputs, settings: AppSettings = Settings):
         return scene_work(project_id, outputs, lambda path: generate_scene_video_for_project(
             path, scene_id, settings, model_name=model, duration=duration, multi_shots=multi_shots, match_prev_frame=match_prev_frame))

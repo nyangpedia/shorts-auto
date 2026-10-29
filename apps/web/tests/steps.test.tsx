@@ -122,7 +122,7 @@ describe("ScenesStep", () => {
 
     await user.click(screen.getByRole("button", { name: "남은 영상 1개 만들기" }));
     await waitFor(() => expect(onGenerateVideo).toHaveBeenCalledTimes(1));
-    expect(onGenerateVideo).toHaveBeenCalledWith(2, "kenburns");
+    expect(onGenerateVideo).toHaveBeenCalledWith(2, "parallax");
   });
 
   it("shows the applied style and re-plans scenes only after confirming a change", async () => {
