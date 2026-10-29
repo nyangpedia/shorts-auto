@@ -1,3 +1,4 @@
+"""Script step API: two drafts from the analysis, pick one, polish it for TTS, edit it, fact-check it."""
 from __future__ import annotations
 
 import json
@@ -7,22 +8,24 @@ from typing import Callable
 from fastapi import APIRouter, Depends, HTTPException
 
 from app.core.settings import AppSettings
-from app.jobs.service import append_job, update_job_state
+from app.projects.progress import job, update_progress
 from app.projects.service import read_project, save_project
 from app.references.files import REFERENCE_ANALYSIS_FILE, REFERENCE_SCRIPT_FILE
 from app.references.openai_clients import AnalysisClient
 from app.scripts.files import (
+    FACT_CHECK_FILE,
     FINAL_SCRIPT_FILE,
     FINAL_SCRIPT_STATE_FILE,
     SCRIPT_CANDIDATES_FILE,
     SELECTED_SCRIPT_CANDIDATE_FILE,
+    read_final_script_state,
     read_script_candidates,
     read_script_state,
+    write_fact_check,
     write_final_script_state,
     write_script_candidates,
     write_selected_script_candidate,
 )
-from app.scripts.files import FACT_CHECK_FILE, read_final_script_state, write_fact_check
 from app.scripts.generation import (
     build_candidate_generation_prompt,
     build_fact_check_prompt,
@@ -32,12 +35,7 @@ from app.scripts.generation import (
     parse_fact_check,
     validate_candidate_payload,
 )
-from app.scripts.models import (
-    FinalizeScriptRequest,
-    GenerateCandidatesRequest,
-    SelectScriptCandidateRequest,
-    UpdateFinalScriptRequest,
-)
+from app.scripts.models import FinalizeScriptRequest, GenerateCandidatesRequest, SelectScriptCandidateRequest, UpdateFinalScriptRequest
 
 
 def create_scripts_router(
@@ -46,252 +44,129 @@ def create_scripts_router(
     script_client_factory: Callable[[str, str], AnalysisClient],
 ) -> APIRouter:
     router = APIRouter(prefix="/api/projects/{project_id}/scripts", tags=["scripts"])
+    Outputs = Depends(outputs_dir_provider)
+    Settings = Depends(settings_provider)
 
-    def project_dir(outputs_dir: Path, project_id: str) -> Path:
-        read_project(outputs_dir, project_id)
-        return outputs_dir / project_id
+    def folder(outputs: Path, project_id: str) -> Path:
+        try:
+            read_project(outputs, project_id)
+        except FileNotFoundError as exc:
+            raise HTTPException(status_code=404, detail="Project not found") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        return outputs / project_id
 
-    def fail_job(outputs_dir: Path, project_id: str, job_id: str | None, message: str) -> None:
-        if job_id is None:
-            return
-        update_job_state(outputs_dir, project_id, job_id, "failed", message, error_message=message)
+    def llm(settings: AppSettings) -> AnalysisClient:
+        return script_client_factory(settings.llm_api_key, settings.openai_analysis_model)
+
+    def confirmed(path: Path):
+        current = read_final_script_state(path)
+        if current is None:
+            raise HTTPException(status_code=400, detail="먼저 대본을 확정해주세요.")
+        return current
 
     @router.get("")
-    def get_scripts(project_id: str, outputs: Path = Depends(outputs_dir_provider)):
-        try:
-            return read_script_state(project_dir(outputs, project_id)).model_dump()
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Project not found") from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    def get_scripts(project_id: str, outputs: Path = Outputs):
+        return read_script_state(folder(outputs, project_id)).model_dump()
 
     @router.post("/candidates")
-    def generate_candidates(
-        project_id: str,
-        payload: GenerateCandidatesRequest | None = None,
-        outputs: Path = Depends(outputs_dir_provider),
-        settings: AppSettings = Depends(settings_provider),
-    ):
-        job_id: str | None = None
-        feedback = payload.feedback.strip() if payload else ""
+    def generate_candidates(project_id: str, payload: GenerateCandidatesRequest | None = None,
+                            outputs: Path = Outputs, settings: AppSettings = Settings):
+        path = folder(outputs, project_id)
+        if not (path / REFERENCE_SCRIPT_FILE).exists() or not (path / REFERENCE_ANALYSIS_FILE).exists():
+            raise HTTPException(status_code=400, detail="Reference script and analysis are required")
         try:
-            path = project_dir(outputs, project_id)
-            script_path = path / REFERENCE_SCRIPT_FILE
-            analysis_path = path / REFERENCE_ANALYSIS_FILE
-            if not script_path.exists() or not analysis_path.exists():
-                raise HTTPException(status_code=400, detail="Reference script and analysis are required")
-
-            reference_script = script_path.read_text(encoding="utf-8")
-            reference_analysis = json.loads(analysis_path.read_text(encoding="utf-8"))
-            job = append_job(
-                outputs,
-                project_id,
-                "script_candidates",
-                "Generate script candidates",
-                input_paths=[REFERENCE_SCRIPT_FILE, REFERENCE_ANALYSIS_FILE],
-                provider="openai",
-                command=settings.openai_analysis_model,
-            )
-            job_id = job.job_id
-            update_job_state(
-                outputs,
-                project_id,
-                job.job_id,
-                "running",
-                "Generating script drafts based on analysis and feedback",
-            )
-            client = script_client_factory(settings.llm_api_key, settings.openai_analysis_model)
-            prompt = build_candidate_generation_prompt(reference_script, reference_analysis, feedback)
-            response_payload = client.analyze(prompt)
-            candidates = validate_candidate_payload(response_payload)
-            write_script_candidates(path, candidates)
-
-            project = read_project(outputs, project_id)
-            project.generated_files["script_candidates"] = SCRIPT_CANDIDATES_FILE
-            project.current_step = "Candidates"
-            for status in project.step_statuses:
-                if status.name == "Candidates":
-                    status.state = "succeeded"
-                    status.message = f"{len(candidates)} candidate drafts are ready for selection."
-                elif status.name == "Script":
-                    status.state = "waiting"
-                    status.message = "Candidate drafts generated. Select a candidate to finalize script."
-            save_project(outputs, project)
-            update_job_state(
-                outputs,
-                project_id,
-                job.job_id,
-                "succeeded",
-                "Script candidates generated",
-                output_paths=[SCRIPT_CANDIDATES_FILE],
-            )
-            return {"candidates": [item.model_dump() for item in candidates]}
-        except HTTPException:
-            raise
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Project not found") from exc
+            with job(outputs, project_id, "script_candidates", "Generate script candidates",
+                     "Generating script drafts based on analysis and feedback", provider="llm",
+                     command=settings.openai_analysis_model, inputs=[REFERENCE_SCRIPT_FILE, REFERENCE_ANALYSIS_FILE]) as run:
+                prompt = build_candidate_generation_prompt(
+                    (path / REFERENCE_SCRIPT_FILE).read_text(encoding="utf-8"),
+                    json.loads((path / REFERENCE_ANALYSIS_FILE).read_text(encoding="utf-8")),
+                    payload.feedback if payload else "",
+                )
+                drafts = validate_candidate_payload(llm(settings).analyze(prompt))
+                write_script_candidates(path, drafts)
+                update_progress(
+                    outputs, project_id, current="Candidates",
+                    steps={"Candidates": ("succeeded", f"{len(drafts)} candidate drafts are ready for selection."),
+                           "Script": ("waiting", "Candidate drafts generated. Select a candidate to finalize script.")},
+                    files={"script_candidates": SCRIPT_CANDIDATES_FILE},
+                )
+                run.succeed("Script candidates generated", [SCRIPT_CANDIDATES_FILE])
         except Exception as exc:
-            message = str(exc) or exc.__class__.__name__
-            fail_job(outputs, project_id, job_id, message)
-            raise HTTPException(status_code=400, detail=message) from exc
+            raise HTTPException(status_code=400, detail=str(exc) or type(exc).__name__) from exc
+        return {"candidates": [d.model_dump() for d in drafts]}
 
     @router.post("/select")
-    def select_candidate(
-        project_id: str,
-        payload: SelectScriptCandidateRequest,
-        outputs: Path = Depends(outputs_dir_provider),
-    ):
-        try:
-            path = project_dir(outputs, project_id)
-            matches = [
-                item
-                for item in read_script_candidates(path)
-                if item.candidate_id == payload.candidate_id
-            ]
-            if not matches:
-                raise HTTPException(status_code=404, detail="Script candidate not found")
-            selected = matches[0]
-            write_selected_script_candidate(path, selected)
-
-            project = read_project(outputs, project_id)
-            project.selected_candidate_id = selected.candidate_id
-            project.generated_files["selected_script_candidate"] = SELECTED_SCRIPT_CANDIDATE_FILE
-            project.current_step = "Script"
-            for status in project.step_statuses:
-                if status.name == "Candidates":
-                    status.state = "succeeded"
-                    status.message = "Script candidate selected."
-                elif status.name == "Script":
-                    status.state = "running"
-                    status.message = "Ready to finalize TTS script."
-            save_project(outputs, project)
-            return {"selected_candidate": selected.model_dump()}
-        except HTTPException:
-            raise
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Project not found") from exc
-        except ValueError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    def select_candidate(project_id: str, payload: SelectScriptCandidateRequest, outputs: Path = Outputs):
+        path = folder(outputs, project_id)
+        chosen = next((c for c in read_script_candidates(path) if c.candidate_id == payload.candidate_id), None)
+        if chosen is None:
+            raise HTTPException(status_code=404, detail="Script candidate not found")
+        write_selected_script_candidate(path, chosen)
+        project = read_project(outputs, project_id)
+        project.selected_candidate_id = chosen.candidate_id
+        save_project(outputs, project)
+        update_progress(
+            outputs, project_id, current="Script",
+            steps={"Candidates": ("succeeded", "Script candidate selected."), "Script": ("running", "Ready to finalize TTS script.")},
+            files={"selected_script_candidate": SELECTED_SCRIPT_CANDIDATE_FILE},
+        )
+        return {"selected_candidate": chosen.model_dump()}
 
     @router.post("/finalize")
-    def finalize_script(
-        project_id: str,
-        payload: FinalizeScriptRequest,
-        outputs: Path = Depends(outputs_dir_provider),
-        settings: AppSettings = Depends(settings_provider),
-    ):
-        job_id: str | None = None
+    def finalize_script(project_id: str, payload: FinalizeScriptRequest, outputs: Path = Outputs, settings: AppSettings = Settings):
+        path = folder(outputs, project_id)
+        chosen = read_script_state(path).selected_candidate
+        if chosen is None:
+            raise HTTPException(status_code=400, detail="Select a script candidate before finalizing")
         try:
-            path = project_dir(outputs, project_id)
-            selected = read_script_state(path).selected_candidate
-            if selected is None:
-                raise HTTPException(status_code=400, detail="Select a script candidate before finalizing")
-
-            job = append_job(
-                outputs,
-                project_id,
-                "final_script",
-                "Finalize TTS script",
-                input_paths=[SELECTED_SCRIPT_CANDIDATE_FILE],
-                provider="openai",
-                command=settings.openai_analysis_model,
-            )
-            job_id = job.job_id
-            update_job_state(outputs, project_id, job.job_id, "running", "Finalizing TTS-ready script")
-            client = script_client_factory(settings.llm_api_key, settings.openai_analysis_model)
-            response = client.analyze(build_final_script_prompt(selected, payload.feedback))
-            final_script = extract_final_script(response)
-            state = build_final_script_state(selected.candidate_id, payload.feedback, final_script)
-            write_final_script_state(path, state)
-
-            project = read_project(outputs, project_id)
-            project.generated_files["final_script"] = FINAL_SCRIPT_FILE
-            project.generated_files["final_script_state"] = FINAL_SCRIPT_STATE_FILE
-            # Scenes are built in the voice/style step, with the style the user picks and the real narration
-            # timing. (Building them here used the default style and silently overrode the user's choice.)
-
-            project.current_step = "Production"
-            for status in project.step_statuses:
-                if status.name == "Script":
-                    status.state = "succeeded"
-                    status.message = "Final TTS-ready script complete."
-                elif status.name == "Production":
-                    status.state = "waiting"
-                    status.message = "Script and scene prompts ready. Ready for TTS voice and images."
-            save_project(outputs, project)
-            update_job_state(
-                outputs,
-                project_id,
-                job.job_id,
-                "succeeded",
-                "Final script complete",
-                output_paths=[FINAL_SCRIPT_FILE, FINAL_SCRIPT_STATE_FILE],
-            )
-            return state.model_dump()
-        except HTTPException:
-            raise
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Project not found") from exc
+            with job(outputs, project_id, "final_script", "Finalize TTS script", "Finalizing TTS-ready script",
+                     provider="llm", command=settings.openai_analysis_model, inputs=[SELECTED_SCRIPT_CANDIDATE_FILE]) as run:
+                script = extract_final_script(llm(settings).analyze(build_final_script_prompt(chosen, payload.feedback)))
+                state = build_final_script_state(chosen.candidate_id, payload.feedback, script)
+                write_final_script_state(path, state)
+                # Scenes are planned later, in the voice/style step, with the style the user picks and the
+                # real narration timing.
+                update_progress(
+                    outputs, project_id, current="Production",
+                    steps={"Script": ("succeeded", "Final TTS-ready script complete."),
+                           "Production": ("waiting", "Script and scene prompts ready. Ready for TTS voice and images.")},
+                    files={"final_script": FINAL_SCRIPT_FILE, "final_script_state": FINAL_SCRIPT_STATE_FILE},
+                )
+                run.succeed("Final script complete", [FINAL_SCRIPT_FILE, FINAL_SCRIPT_STATE_FILE])
         except Exception as exc:
-            message = str(exc) or exc.__class__.__name__
-            fail_job(outputs, project_id, job_id, message)
-            raise HTTPException(status_code=400, detail=message) from exc
+            raise HTTPException(status_code=400, detail=str(exc) or type(exc).__name__) from exc
+        return state.model_dump()
 
     @router.put("/final")
-    def update_final_script(
-        project_id: str,
-        payload: UpdateFinalScriptRequest,
-        outputs: Path = Depends(outputs_dir_provider),
-    ):
-        try:
-            path = project_dir(outputs, project_id)
-            current = read_final_script_state(path)
-            if current is None:
-                raise HTTPException(status_code=400, detail="먼저 대본을 확정해주세요.")
-            if current.final_script.strip() == payload.final_script.strip():
-                return read_script_state(path).model_dump()
-            state = build_final_script_state(current.selected_candidate_id, current.feedback, payload.final_script)
-            write_final_script_state(path, state)
-
-            project = read_project(outputs, project_id)
-            for status in project.step_statuses:
-                if status.name == "Script":
-                    status.message = "대본을 직접 수정했습니다."
-                elif status.name == "Production" and status.state == "succeeded":
-                    status.state = "waiting"
-                    status.message = "대본이 바뀌었습니다. 음성과 씬을 다시 만들어주세요."
-            save_project(outputs, project)
+    def update_final_script(project_id: str, payload: UpdateFinalScriptRequest, outputs: Path = Outputs):
+        path = folder(outputs, project_id)
+        current = confirmed(path)
+        if current.final_script.strip() == payload.final_script.strip():
             return read_script_state(path).model_dump()
-        except HTTPException:
-            raise
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Project not found") from exc
+        try:
+            write_final_script_state(path, build_final_script_state(current.selected_candidate_id, current.feedback, payload.final_script))
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
+        project = read_project(outputs, project_id)
+        for step in project.step_statuses:
+            if step.name == "Script":
+                step.message = "대본을 직접 수정했습니다."
+            elif step.name == "Production" and step.state == "succeeded":
+                step.state, step.message = "waiting", "대본이 바뀌었습니다. 음성과 씬을 다시 만들어주세요."
+        save_project(outputs, project)
+        return read_script_state(path).model_dump()
 
     @router.post("/factcheck")
-    def fact_check_script(
-        project_id: str,
-        outputs: Path = Depends(outputs_dir_provider),
-        settings: AppSettings = Depends(settings_provider),
-    ):
+    def fact_check_script(project_id: str, outputs: Path = Outputs, settings: AppSettings = Settings):
+        path = folder(outputs, project_id)
+        script = confirmed(path).final_script
         try:
-            path = project_dir(outputs, project_id)
-            current = read_final_script_state(path)
-            if current is None:
-                raise HTTPException(status_code=400, detail="먼저 대본을 확정해주세요.")
-            client = script_client_factory(settings.llm_api_key, settings.openai_analysis_model)
-            result = parse_fact_check(client.analyze(build_fact_check_prompt(current.final_script)), current.final_script)
-            write_fact_check(path, result)
-            project = read_project(outputs, project_id)
-            project.generated_files["fact_check"] = FACT_CHECK_FILE
-            save_project(outputs, project)
-            return read_script_state(path).model_dump()
-        except HTTPException:
-            raise
-        except FileNotFoundError as exc:
-            raise HTTPException(status_code=404, detail="Project not found") from exc
+            write_fact_check(path, parse_fact_check(llm(settings).analyze(build_fact_check_prompt(script)), script))
         except Exception as exc:
-            raise HTTPException(status_code=400, detail=str(exc) or exc.__class__.__name__) from exc
+            raise HTTPException(status_code=400, detail=str(exc) or type(exc).__name__) from exc
+        update_progress(outputs, project_id, files={"fact_check": FACT_CHECK_FILE})
+        return read_script_state(path).model_dump()
 
     return router
