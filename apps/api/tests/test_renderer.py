@@ -36,3 +36,23 @@ def test_scene_files_are_served_only_by_their_own_names(tmp_path: Path):
     assert client.get(f"/api/projects/{pid}/production/scenes/scene_01_start.png").status_code == 200
     assert client.get(f"/api/projects/{pid}/production/scenes/notes.txt").status_code == 404
     assert client.get(f"/api/projects/{pid}/production/scenes/..%2Fproject.json").status_code == 404
+
+
+def test_composition_folder_for_hyperframes(tmp_path, monkeypatch):
+    from app.core.paths import find_repo_root
+    from app.production import renderer
+
+    monkeypatch.setattr(renderer, "media_duration", lambda path: 20.0)  # the music file is 20 s
+    for name in ("track.mp4", "voice.wav", "bgm.mp3"):
+        (tmp_path / name).write_bytes(b"x")
+    props = {"fps": 24, "durationInFrames": 24 * 50, "voice": "voice.wav", "bgm": "bgm.mp3", "bgmVolume": 0.15,
+             "subtitles": [{"text": "</script><b>깨지지 않음", "start": 0, "end": 1}], "title": "제목", "sceneStarts": [2.5]}
+    folder = renderer.build_composition(props, {n: tmp_path / n for n in ("track.mp4", "voice.wav", "bgm.mp3")},
+                                        tmp_path / "comp", find_repo_root() / "apps" / "video")
+
+    html = (folder / "index.html").read_text(encoding="utf-8")
+    assert "__" not in html.replace("__timelines", "")  # every placeholder filled
+    assert 'data-duration="50.000"' in html and 'data-fps="24"' in html
+    assert html.count('src="assets/bgm.mp3"') == 3  # 50 s of video, 20 s of music: looped 3 times
+    assert "</script><b>" not in html  # a subtitle can't end the script early
+    assert (folder / "assets" / "track.mp4").exists() and (folder / "Pretendard-Black.woff2").exists()

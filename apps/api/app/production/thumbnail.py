@@ -9,7 +9,7 @@ from app.production.paths import scene_asset
 
 THUMBNAIL = "thumbnail.jpg"
 SIZE = (1080, 1920)
-FONT = Path(__file__).resolve().parents[3] / "remotion" / "src" / "fonts" / "Pretendard-Black.woff2"
+FONT = Path(__file__).resolve().parents[3] / "video" / "fonts" / "Pretendard-Black.woff2"
 LINE_WIDTH = 940  # px a title line may use
 ACCENT = (255, 214, 10)  # last line, the payoff word(s)
 

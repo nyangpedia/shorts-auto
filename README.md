@@ -7,7 +7,7 @@
 [![Python](https://img.shields.io/badge/Python-3.11+-3776AB?logo=python&logoColor=white)](https://python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
 [![React](https://img.shields.io/badge/React-18+-61DAFB?logo=react&logoColor=white)](https://react.dev/)
-[![Remotion](https://img.shields.io/badge/Remotion-Video_Rendering-0B84F3?logo=remotion&logoColor=white)](https://remotion.dev/)
+[![HyperFrames](https://img.shields.io/badge/HyperFrames-Video_Rendering-111111)](https://github.com/heygen-com/hyperframes)
 
 ---
 
@@ -31,9 +31,9 @@
 
 **Shorts Auto**는 유튜브 쇼츠의 흥행 공식을 데이터 기반으로 분석하고, 기획/대본 작성/음성 합성/AI 비디오 생성/자막 및 타이틀 렌더링까지 전 과정을 로컬 웹 대시보드에서 유기적으로 수행할 수 있는 자동화 플랫폼입니다.
 
-- **FastAPI 백엔드:** 비동기 작업 큐, 유튜브 오디오 추출, Whisper STT, GPT 대본 생성, Remotion 및 FFmpeg 렌더링 파이프라인 제어
+- **FastAPI 백엔드:** 비동기 작업 큐, 유튜브 오디오 추출, Whisper STT, GPT 대본 생성, HyperFrames 및 FFmpeg 렌더링 파이프라인 제어
 - **Vite React 프론트엔드:** 단계별 진행 상황 실시간 모니터링, 초안 선택, 씬별 프롬프트 수정 및 미리보기를 지원하는 직관적인 대시보드
-- **Remotion 비디오 렌더러:** 타임스탬프 기반 자막 싱크, 동적 스프링 애니메이션 타이틀 카드, 오디오/비디오 자동 믹싱
+- **HyperFrames 비디오 렌더러 (Apache-2.0):** HTML 한 장(`apps/video/shorts.html`)으로 자막 단어 강조, 타이틀, 장면 전환 효과, 오디오 믹싱
 
 ---
 
@@ -56,7 +56,7 @@
 이 프로젝트를 구동하기 위해 아래 시스템 도구들이 컴퓨터에 설치되어 있어야 합니다.
 
 ### 1) 미디어 처리 도구 (필수)
-- **ffmpeg**: 오디오 변환, 영상 인코딩 및 Remotion 합성
+- **ffmpeg**: 오디오 변환, 영상 인코딩 및 HyperFrames 합성
 - **yt-dlp**: 유튜브 쇼츠 음원 다운로드
 
 #### OS별 설치 방법:
@@ -179,9 +179,7 @@ shorts-auto/
 │   ├── api/                   # FastAPI 백엔드 (Python 3.11+, uv)
 │   │   ├── app/               # API 라우터, 비즈니스 로직, 렌더러 파이프라인
 │   │   └── tests/             # 백엔드 pytest 테스트 스위트
-│   ├── remotion/              # Remotion 비디오 렌더러 (React + Webpack)
-│   │   ├── src/               # 쇼츠 씬 컴포지션, 자막, 타이틀 오버레이
-│   │   └── render.mjs         # Remotion 렌더 실행 CLI 스크립트
+│   ├── video/                 # HyperFrames 영상 템플릿 (shorts.html) + Pretendard 폰트
 │   └── web/                   # 대시보드 프론트엔드 (Vite, React, TypeScript)
 │       ├── src/               # 대시보드 컴포넌트 및 API 클라이언트
 │       └── tests/             # 프론트엔드 Vitest 테스트 스위트

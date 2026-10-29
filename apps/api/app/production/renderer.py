@@ -1,10 +1,11 @@
 """Final render: fit every scene clip to its narration slot, join them, and hand video + narration +
-BGM + timed subtitles + opening title to the Remotion composition (apps/remotion)."""
+BGM + timed subtitles + opening title to the HyperFrames composition (apps/video/shorts.html)."""
 from __future__ import annotations
 
 import json
 import logging
 import math
+import os
 import shutil
 import subprocess
 from pathlib import Path
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 RENDER_FPS = 24
 WORK_DIR = "_render_tmp"
 FINAL_VIDEO = "final.mp4"
+HYPERFRAMES_VERSION = "0.8.214"  # keep in sync with apps/video/package.json
 
 
 def _fit_clip(source: Path, seconds: float, target: Path) -> None:
@@ -105,6 +107,38 @@ def _mark_rendered(project_dir: Path) -> None:
     )
 
 
+def build_composition(props: dict, sources: dict[str, Path], folder: Path, video_app: Path) -> Path:
+    """A HyperFrames project in `folder`: the composition as index.html, media under assets/, the font."""
+    assets = folder / "assets"
+    assets.mkdir(parents=True, exist_ok=True)
+    for name, source in sources.items():
+        shutil.copyfile(source, assets / name)
+    shutil.copyfile(video_app / "fonts" / "Pretendard-Black.woff2", folder / "Pretendard-Black.woff2")
+
+    seconds = props["durationInFrames"] / props["fps"]
+    media = [
+        f'  <video id="track" class="clip" data-start="0" data-duration="{seconds}" src="assets/track.mp4" muted playsinline></video>',
+        f'  <audio data-start="0" data-duration="{seconds}" src="assets/{props["voice"]}"></audio>',
+    ]
+    if props.get("bgm"):
+        length, start = media_duration(assets / props["bgm"]), 0.0
+        while length > 0 and start < seconds:  # the music loops: one clip per pass
+            media.append(f'  <audio data-start="{start:.3f}" data-duration="{min(length, seconds - start):.3f}" '
+                         f'data-volume="{props["bgmVolume"]}" src="assets/{props["bgm"]}"></audio>')
+            start += length
+    html = (video_app / "shorts.html").read_text(encoding="utf-8")
+    props_json = json.dumps(props, ensure_ascii=False).replace("</", "<\\/")  # a subtitle can't close the <script>
+    html = html.replace("__SECONDS__", f"{seconds:.3f}").replace("__FPS__", str(props["fps"])).replace("__MEDIA__", "\n".join(media)).replace("__PROPS__", props_json)
+    (folder / "index.html").write_text(html, encoding="utf-8")
+    return folder
+
+
+def _hyperframes_command(video_app: Path) -> list[str]:
+    """The pinned CLI from apps/video/node_modules, else npx fetches the same version once."""
+    local = video_app / "node_modules" / ".bin" / ("hyperframes.cmd" if os.name == "nt" else "hyperframes")
+    return [str(local)] if local.exists() else ["npx", "-y", f"hyperframes@{HYPERFRAMES_VERSION}"]
+
+
 def render_final_shorts(project_dir: Path, settings: AppSettings, title: str | None = None) -> Path:
     narration = project_dir / TTS_AUDIO_FILENAME
     if not narration.exists():
@@ -116,37 +150,37 @@ def render_final_shorts(project_dir: Path, settings: AppSettings, title: str | N
 
     video, durations = build_scene_track(project_dir, work)
     repo = find_repo_root()
-    # Remotion copies publicDir into its bundle, so it is the project folder only (the repo root would drag
-    # in pnpm's node_modules symlinks, which Windows refuses to copy without admin rights).
-    public = project_dir.resolve()
-    rel = lambda p: p.resolve().relative_to(public).as_posix()  # noqa: E731
+    video_app = repo / "apps" / "video"
 
+    sources = {"track.mp4": video, f"voice{narration.suffix}": narration}
     bgm_source = repo / settings.bgm_path
-    bgm = None
     if bgm_source.exists() and bgm_source.stat().st_size > 1000:
-        bgm = work / f"bgm{bgm_source.suffix}"
-        shutil.copyfile(bgm_source, bgm)
+        sources[f"bgm{bgm_source.suffix}"] = bgm_source
 
     props = {
-        "videoSrc": rel(video),
-        "audioSrc": rel(narration),
-        "bgmSrc": rel(bgm) if bgm else None,
-        "bgmVolume": float(settings.bgm_volume) if bgm else 0.15,
-        "subtitles": timed_subtitles(project_dir, narration, settings),
+        "fps": RENDER_FPS,
         "durationInFrames": max(RENDER_FPS, round(media_duration(narration) * RENDER_FPS)),
+        "voice": f"voice{narration.suffix}",
+        "bgm": f"bgm{bgm_source.suffix}" if len(sources) > 2 else None,
+        "bgmVolume": float(settings.bgm_volume),
+        "subtitles": timed_subtitles(project_dir, narration, settings),
         "title": opening_title(project_dir, title),
         "sceneStarts": [round(sum(durations[:i]), 3) for i in range(1, len(durations))],
     }
-    props_file = work / "remotion_props.json"
-    props_file.write_text(json.dumps(props, ensure_ascii=False, indent=2), encoding="utf-8")
+    folder = work / "composition"
+    shutil.rmtree(folder, ignore_errors=True)
+    build_composition(props, sources, folder, video_app)
 
     output = project_dir / FINAL_VIDEO
+    output.unlink(missing_ok=True)  # so an old video can't pass for a new one
+    env = {**os.environ, "HYPERFRAMES_NO_TELEMETRY": "1", "DO_NOT_TRACK": "1"}  # no usage reports from users' PCs
     done = subprocess.run(
-        ["node", str((repo / "apps" / "remotion" / "render.mjs").resolve()),
-         f"--props={props_file.resolve()}", f"--output={output.resolve()}", f"--public={public}"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=str(repo),
+        [*_hyperframes_command(video_app), "render", str(folder.resolve()), "--fps", str(RENDER_FPS),
+         "--output", str(output.resolve()), "--quiet"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
+        shell=os.name == "nt",  # npx and the .cmd shim are batch files on Windows
     )
-    if done.returncode != 0:
-        raise RuntimeError(f"Remotion 렌더링 실패: {(done.stderr or done.stdout)[-1500:]}")
+    if done.returncode != 0 or not output.exists():
+        raise RuntimeError(f"HyperFrames 렌더링 실패: {(done.stderr or done.stdout)[-1500:]}")
     _mark_rendered(project_dir)
     return output

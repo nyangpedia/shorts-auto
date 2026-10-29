@@ -35,7 +35,7 @@ from app.projects.service import read_project
 _SCENE_FILE = re.compile(r"^scene_\d{2}_(start|final|end)\.png$|^scene_\d{2}_video\.mp4$")
 _NARRATION_DONE = {
     "Production": ("succeeded", "TTS and scene alignment complete."),
-    "Render": ("waiting", "Ready for visual concept & Remotion rendering."),
+    "Render": ("waiting", "Ready for visual concept & final rendering."),
 }
 
 
@@ -156,7 +156,7 @@ def create_production_router(outputs_dir_provider: Callable[[], Path], settings_
         path = folder(outputs, project_id)
         try:
             with job(outputs, project_id, "production_render", "Render final shorts video with speed sync and subtitles",
-                     "Rendering 9:16 shorts video with subtitles and BGM", provider="remotion", command="render_final_shorts",
+                     "Rendering 9:16 shorts video with subtitles and BGM", provider="hyperframes", command="render_final_shorts",
                      inputs=[VIDEO_SCENES_FILENAME, TTS_AUDIO_FILENAME, SCENE_DATA_FILENAME]) as run:
                 render_final_shorts(path, settings, title=req.title if req else None)  # falls back to the project title
                 run.succeed("Final shorts video rendered successfully", [FINAL_VIDEO])

@@ -1,0 +1,9 @@
+{
+  "name": "@shorts-auto/video",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Final Short composition, rendered by HyperFrames (Apache-2.0). The API's renderer fills in shorts.html.",
+  "dependencies": {
+    "hyperframes": "0.8.214"
+  }
+}

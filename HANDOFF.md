@@ -15,8 +15,8 @@
 | 음성 | Gemini TTS `gemini-3.8-flash-tts`, 음성 Kore | edge / qwen3도 선택 가능 (`TTS_PROVIDER`) |
 | 이미지 | `cloudflare` (Workers AI FLUX schnell, 하루 ~200장) | 정사각형 출력 → 9:16로 크롭. 일시적 400은 자동 재시도 |
 | 화풍 | 7종 선택 (`app/production/styles.py`) | 제작 패널 "화풍" + [씬 구성하기]. 기본값 `VISUAL_STYLE` |
-| 영상 | `kenburns` 카메라 5종 순환 + Remotion 모션그래픽 | 씬 전환 펀치줌·플래시, 자막 숫자 노란 강조, 상단 진행 바 |
-| 렌더링 | Remotion | 약 5~7분(CPU) |
+| 영상 | `parallax` 2.5D 입체 모션(기본, 깊이 모델 Depth Anything V2 small) 또는 `kenburns` + HyperFrames 모션그래픽 | 씬 전환 펀치줌·플래시, 자막 숫자 노란 강조, 상단 진행 바 |
+| 렌더링 | HyperFrames 0.8.214 (`apps/video/shorts.html`, WAAPI 애니메이션, 텔레메트리 끔) | 50초 영상 약 5분(CPU) |
 
 삭제/불가: `stock`(Pixabay/Pexels, 대본과 무관한 사진 → 삭제), `pollinations`(402), `gemini_image`(무료 한도 없음).
 

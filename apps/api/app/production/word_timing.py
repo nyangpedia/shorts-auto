@@ -12,7 +12,7 @@ from pathlib import Path
 
 WORDS_CACHE_FILE = "subtitle_words.json"
 # Subtitles use one fixed size; a chunk is cut so that it fits on one line at that size.
-# Keep in sync with SUBTITLE_FONT_PX / MAX_WIDTH and lineWidthEm in apps/remotion/src/Subtitles.tsx.
+# Keep in sync with the .sub font-size / max-width in apps/video/shorts.html.
 SUBTITLE_FONT_PX = 84
 LINE_WIDTH_PX = 820
 PAUSE_SPLIT = 0.35  # a breath longer than this starts a new chunk

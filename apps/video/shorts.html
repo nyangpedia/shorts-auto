@@ -1,0 +1,135 @@
+<!doctype html>
+<!--
+  The final 9:16 Short. apps/api/app/production/renderer.py copies this file into a render folder as index.html,
+  fills in the double-underscore placeholders (length, fps, media tags, props), and runs `hyperframes render` on it.
+
+  Layers, back to front: scene footage (punch-in on cuts), cut flash, progress bar, subtitles, opening title.
+  Every animation is a plain Web Animation (element.animate) spanning the whole video, so the renderer can
+  seek any frame; no animation library is needed.
+-->
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  /* Pretendard (SIL OFL 1.1, fonts/LICENSE-Pretendard.txt), bundled so every PC renders the same type */
+  @font-face { font-family: "Pretendard Shorts"; src: url("Pretendard-Black.woff2") format("woff2"); font-weight: 900; }
+  html, body { margin: 0; background: #000; }
+  #root { position: relative; width: 1080px; height: 1920px; overflow: hidden; background: #000;
+          font-family: "Pretendard Shorts", sans-serif; font-weight: 900; }
+  #track { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  #flash { position: absolute; inset: 0; background: #fff; opacity: 0; z-index: 40; }
+  #bar { position: absolute; top: 0; left: 0; right: 0; height: 12px; background: rgba(0, 0, 0, .35); z-index: 60; }
+  #bar i { display: block; height: 100%; background: #ffd400; transform-origin: 0 50%; transform: scaleX(0); }
+  /* subtitle line centred ~620px from the bottom: under the subject, above YouTube's caption overlay */
+  .sub { position: absolute; left: 0; right: 0; bottom: 570px; display: flex; justify-content: center; z-index: 50; opacity: 0; }
+  /* opening title in the upper third, below YouTube's top icons */
+  .title { position: absolute; inset: 0; padding: 300px 40px 0; display: flex; flex-direction: column; align-items: center; gap: 8px; z-index: 60; }
+  /* thick outline that looks the same everywhere: a stroked copy underneath, the clean fill on top */
+  .o { position: relative; text-align: center; }
+  .o > .stroke { color: #000; text-shadow: 0 6px 18px rgba(0, 0, 0, .7); }
+  .o > .fill { position: absolute; inset: 0; }
+  /* one size for every line; the API cuts chunks to fit (SUBTITLE_FONT_PX / LINE_WIDTH_PX in word_timing.py) */
+  .sub .o { max-width: 820px; font-size: 84px; line-height: 1.2; letter-spacing: -2px; word-break: keep-all; color: #fff; }
+  .sub .stroke { -webkit-text-stroke: 14px #000; }
+  .title .o { white-space: nowrap; line-height: 1.15; letter-spacing: -3px; color: #fff; }
+  .title .stroke { -webkit-text-stroke: 18px #000; }
+  .w { position: relative; }
+  .w > .hl { position: absolute; left: 0; top: 0; color: #ffd400; opacity: 0; }
+</style>
+</head>
+<body>
+<div id="root" data-composition-id="root" data-start="0" data-duration="__SECONDS__" data-width="1080" data-height="1920" data-fps="__FPS__">
+__MEDIA__
+  <div id="flash"></div>
+  <div id="bar"><i></i></div>
+</div>
+<script>
+const P = __PROPS__;
+const MS = (P.durationInFrames / P.fps) * 1000;  // whole video, ms
+const root = document.getElementById("root");
+const YELLOW = "#ffd400";
+
+/** Animate el over the whole video; frames are [ms, css] pairs. Steps hold until the next frame. */
+function track(el, frames, { steps = false } = {}) {
+  const keyframes = frames.map(([ms, css]) => ({ ...css, offset: Math.min(1, Math.max(0, ms / MS)), easing: steps ? "step-end" : "linear" }));
+  if (keyframes[0].offset > 0) keyframes.unshift({ ...frames[0][1], offset: 0, easing: keyframes[0].easing });
+  el.animate(keyframes, { duration: MS, fill: "both" });
+}
+
+/** A one-off move starting at `at` seconds. "forwards" only: several tweens on one element (one per cut),
+ *  created in time order, then hand over cleanly; "both" would let a later one's start value leak backwards. */
+const tween = (el, from, to, at, seconds, easing = "linear") =>
+  el.animate([from, to], { delay: at * 1000, duration: seconds * 1000, easing, fill: "forwards" });
+
+const BACK_OUT = "cubic-bezier(0.34, 1.56, 0.64, 1)";  // overshoots a little, like a spring
+const esc = (s) => s.replace(/[&<>]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" })[c]);
+const outlined = (inner, style = "") =>
+  `<div class="o" style="${style}"><div class="stroke">${inner}</div><div class="fill">${inner}</div></div>`;
+
+track(document.querySelector("#bar i"), [[0, { transform: "scaleX(0)" }], [MS, { transform: "scaleX(1)" }]]);
+
+// scene cuts: a quick punch-in of the footage and a white flash
+const footage = document.getElementById("track");
+const flash = document.getElementById("flash");
+for (const t of P.sceneStarts || []) {
+  tween(footage, { transform: "scale(1.06)" }, { transform: "scale(1)" }, t, 0.25);
+  tween(flash, { opacity: 0.35 }, { opacity: 0 }, t, 4 / P.fps);
+}
+
+// subtitles: one line at a time, popping in from 85%; the word being spoken is lit until the next one starts
+const NUMBER = /(\d[\d,.]*\s?(?:%|퍼센트|도|초|분|시간|일|년|배|개|명|원|만|억|조|km|kg|m|g)?)/g;
+P.subtitles.forEach((s) => {
+  if (!s.text.trim()) return;
+  const words = s.words || null;
+  const inner = words
+    ? words.map((w) => `<span class="w">${esc(w.text)}<span class="hl">${esc(w.text)}</span></span>`).join(" ")
+    : esc(s.text).split(NUMBER).map((part, j) => (j % 2 ? `<span style="color:${YELLOW}">${part}</span>` : part)).join("");
+  const box = document.createElement("div");
+  box.className = "sub";
+  box.innerHTML = outlined(inner);
+  root.appendChild(box);
+  track(box, [[0, { opacity: 0 }], [s.start * 1000, { opacity: 1 }], [s.end * 1000, { opacity: 0 }]], { steps: true });
+  tween(box.querySelector(".o"), { transform: "scale(0.85)", opacity: 0 }, { transform: "scale(1)", opacity: 1 }, s.start, 0.3, BACK_OUT);
+  if (words) {
+    const lit = box.querySelectorAll(".fill .w > .hl");
+    words.forEach((w, j) => {
+      const until = j + 1 < words.length ? words[j + 1].start : s.end;
+      track(lit[j], [[0, { opacity: 0 }], [Math.max(s.start, w.start) * 1000, { opacity: 1 }], [until * 1000, { opacity: 0 }]], { steps: true });
+    });
+  }
+});
+
+// opening title, 0–2 s: fades and shrinks a little from 1.5 s; the last line (the punchline) is yellow
+function splitTitle(title) {
+  if (title.includes("\n")) return title.split("\n").map((l) => l.trim()).filter(Boolean);
+  const count = Math.min(3, Math.max(1, Math.ceil(title.length / 10)));  // ~10 characters a line, 3 lines at most
+  const goal = title.length / count;
+  const lines = [];
+  let line = "";
+  for (const word of title.split(/\s+/)) {
+    const longer = line ? `${line} ${word}` : word;
+    // never break right after a number: "230만 개의" stays together
+    if (line && longer.length > goal && lines.length < count - 1 && !/[\d만억조천백]$/.test(line)) {
+      lines.push(line);
+      line = word;
+    } else line = longer;
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+if (P.title && P.title.trim()) {
+  const lines = splitTitle(P.title.trim());
+  const longest = Math.max(...lines.map((l) => l.length));
+  const size = Math.round(Math.min(136, Math.max(64, 1000 / (longest * 0.98))));  // a Hangul glyph is about 1em wide
+  const box = document.createElement("div");
+  box.className = "title";
+  box.innerHTML = lines
+    .map((l, i) => outlined(esc(l), `font-size:${size}px;color:${lines.length > 1 && i === lines.length - 1 ? YELLOW : "#fff"}`))
+    .join("");
+  root.appendChild(box);
+  tween(box, { opacity: 1, transform: "scale(1)" }, { opacity: 0, transform: "scale(0.94)" }, 1.5, 0.5);
+}
+</script>
+</body>
+</html>
