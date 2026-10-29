@@ -1,3 +1,4 @@
+"""Project list / create / open / rename-archive / delete API."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta
@@ -7,17 +8,14 @@ from typing import Callable, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
-from app.projects.service import (
-    create_project,
-    delete_project,
-    list_projects,
-    read_project,
-    set_project_archived,
-    update_project_title,
-)
+from app.projects.service import create_project, delete_project, list_projects, read_project, set_project_archived, update_project_title
+
+# A new project takes the current minute as its id; if taken, the next free minute within a day.
+MAX_PROJECT_ID_ATTEMPTS = 24 * 60
 
 
-MAX_PROJECT_ID_ATTEMPTS = 1440
+def timestamp_id(offset_minutes: int = 0) -> str:
+    return (datetime.now() + timedelta(minutes=offset_minutes)).strftime("%y%m%d_%H%M")
 
 
 class CreateProjectRequest(BaseModel):
@@ -29,58 +27,40 @@ class UpdateProjectRequest(BaseModel):
     archived: Optional[bool] = None
 
 
-def timestamp_id(offset_minutes: int = 0) -> str:
-    return (datetime.now() + timedelta(minutes=offset_minutes)).strftime("%y%m%d_%H%M")
-
-
-def _project_response(project):
-    return {"project": project.model_dump()}
-
-
-def _raise_project_error(exc: Exception) -> None:
+def _as_http(exc: Exception) -> HTTPException:
     if isinstance(exc, FileNotFoundError):
-        raise HTTPException(status_code=404, detail="Project not found") from exc
-    if isinstance(exc, ValueError):
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    raise exc
+        return HTTPException(status_code=404, detail="Project not found")
+    return HTTPException(status_code=400, detail=str(exc))
 
 
 def create_projects_router(outputs_dir_provider: Callable[[], Path]) -> APIRouter:
     router = APIRouter(prefix="/api/projects", tags=["projects"])
-
-    def outputs_dir() -> Path:
-        return outputs_dir_provider()
+    Outputs = Depends(outputs_dir_provider)
 
     @router.get("")
-    def get_projects(outputs: Path = Depends(outputs_dir)):
-        return {"projects": [project.model_dump() for project in list_projects(outputs)]}
+    def get_projects(outputs: Path = Outputs):
+        return {"projects": [p.model_dump() for p in list_projects(outputs)]}
 
     @router.post("")
-    def post_project(payload: CreateProjectRequest, outputs: Path = Depends(outputs_dir)):
+    def post_project(payload: CreateProjectRequest, outputs: Path = Outputs):
         for offset in range(MAX_PROJECT_ID_ATTEMPTS):
             try:
-                project = create_project(outputs, payload.project_title, timestamp_id(offset))
-                return _project_response(project)
+                return {"project": create_project(outputs, payload.project_title, timestamp_id(offset)).model_dump()}
             except FileExistsError:
                 continue
             except ValueError as exc:
-                raise HTTPException(status_code=400, detail=str(exc)) from exc
+                raise _as_http(exc) from exc
         raise HTTPException(status_code=409, detail="Could not allocate a unique project_id")
 
     @router.get("/{project_id}")
-    def get_project(project_id: str, outputs: Path = Depends(outputs_dir)):
+    def get_project(project_id: str, outputs: Path = Outputs):
         try:
-            project = read_project(outputs, project_id)
+            return {"project": read_project(outputs, project_id).model_dump()}
         except (FileNotFoundError, ValueError) as exc:
-            _raise_project_error(exc)
-        return _project_response(project)
+            raise _as_http(exc) from exc
 
     @router.patch("/{project_id}")
-    def patch_project(
-        project_id: str,
-        payload: UpdateProjectRequest,
-        outputs: Path = Depends(outputs_dir),
-    ):
+    def patch_project(project_id: str, payload: UpdateProjectRequest, outputs: Path = Outputs):
         try:
             project = read_project(outputs, project_id)
             if payload.project_title is not None:
@@ -88,15 +68,15 @@ def create_projects_router(outputs_dir_provider: Callable[[], Path]) -> APIRoute
             if payload.archived is not None:
                 project = set_project_archived(outputs, project_id, payload.archived)
         except (FileNotFoundError, ValueError) as exc:
-            _raise_project_error(exc)
-        return _project_response(project)
+            raise _as_http(exc) from exc
+        return {"project": project.model_dump()}
 
     @router.delete("/{project_id}")
-    def remove_project(project_id: str, outputs: Path = Depends(outputs_dir)):
+    def remove_project(project_id: str, outputs: Path = Outputs):
         try:
             delete_project(outputs, project_id)
         except (FileNotFoundError, ValueError) as exc:
-            _raise_project_error(exc)
+            raise _as_http(exc) from exc
         return {"deleted": project_id}
 
     return router

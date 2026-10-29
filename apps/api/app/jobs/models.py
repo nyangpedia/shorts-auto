@@ -1,95 +1,61 @@
+"""Job log entries kept in project.json (job_history): what ran, when, with which inputs and outputs."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal, Optional
 from uuid import uuid4
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import AfterValidator, BaseModel, Field
 
 from app.projects.models import utc_now_iso
-
 
 JobState = Literal["pending", "running", "succeeded", "failed"]
 
 
-def _bounded_non_empty(value: str, field_name: str, max_length: int) -> str:
-    stripped = value.strip()
-    if not stripped:
-        raise ValueError(f"{field_name} must not be empty")
-    if len(stripped) > max_length:
-        raise ValueError(f"{field_name} must be at most {max_length} characters")
-    return stripped
+def _trimmed(limit: int):
+    def check(value: str) -> str:
+        text = value.strip()
+        if not text:
+            raise ValueError("must not be empty")
+        if len(text) > limit:
+            raise ValueError(f"must be at most {limit} characters")
+        return text
+    return check
 
 
-def _bounded_path_entries(values: list[str], field_name: str) -> list[str]:
-    safe_paths: list[str] = []
+def _relative_paths(values: list[str]) -> list[str]:
+    """File references stay inside the project folder: no absolute paths (incl. "/x" and "C:x" on Windows), no ".."."""
     for value in values:
-        path_value = _bounded_non_empty(value, field_name, 1024)
-        path = Path(path_value)
-        if path.anchor or ".." in path.parts:  # anchor also catches "/tmp" and "C:x" on Windows
-            raise ValueError(f"{field_name} entries must be relative paths without traversal")
-        safe_paths.append(path_value)
-    return safe_paths
+        path = Path(value)
+        if path.anchor or ".." in path.parts:
+            raise ValueError("entries must be relative paths without traversal")
+    return values
 
 
-def _bounded_optional(value: str | None, field_name: str, max_length: int) -> str | None:
-    if value is None:
-        return None
-    return _bounded_non_empty(value, field_name, max_length)
+Name = Annotated[str, AfterValidator(_trimmed(120))]
+Label = Annotated[str, AfterValidator(_trimmed(200))]
+Message = Annotated[str, AfterValidator(_trimmed(2000))]
+Command = Annotated[str, AfterValidator(_trimmed(500))]
+RelativePaths = Annotated[list[Annotated[str, AfterValidator(_trimmed(1024))]], AfterValidator(_relative_paths)]
 
 
 class JobLog(BaseModel):
     timestamp: str = Field(default_factory=utc_now_iso)
-    message: str
-
-    @field_validator("message")
-    @classmethod
-    def validate_message(cls, value: str) -> str:
-        return _bounded_non_empty(value, "message", 2000)
+    message: Message
 
 
 class JobRecord(BaseModel):
     job_id: str = Field(default_factory=lambda: uuid4().hex)
-    job_type: str
-    label: str
-    provider: str | None = None
-    command: str | None = None
+    job_type: Name
+    label: Label
+    provider: Optional[Name] = None
+    command: Optional[Command] = None
     state: JobState = "pending"
     created_at: str = Field(default_factory=utc_now_iso)
     updated_at: str = Field(default_factory=utc_now_iso)
-    started_at: str | None = None
-    ended_at: str | None = None
-    error_message: str | None = None
-    input_paths: list[str] = Field(default_factory=list)
-    output_paths: list[str] = Field(default_factory=list)
+    started_at: Optional[str] = None
+    ended_at: Optional[str] = None
+    error_message: Optional[Message] = None
+    input_paths: RelativePaths = Field(default_factory=list)
+    output_paths: RelativePaths = Field(default_factory=list)
     logs: list[JobLog] = Field(default_factory=list)
-
-    @field_validator("job_type")
-    @classmethod
-    def validate_job_type(cls, value: str) -> str:
-        return _bounded_non_empty(value, "job_type", 120)
-
-    @field_validator("label")
-    @classmethod
-    def validate_label(cls, value: str) -> str:
-        return _bounded_non_empty(value, "label", 200)
-
-    @field_validator("provider")
-    @classmethod
-    def validate_provider(cls, value: str | None) -> str | None:
-        return _bounded_optional(value, "provider", 120)
-
-    @field_validator("command")
-    @classmethod
-    def validate_command(cls, value: str | None) -> str | None:
-        return _bounded_optional(value, "command", 500)
-
-    @field_validator("error_message")
-    @classmethod
-    def validate_error_message(cls, value: str | None) -> str | None:
-        return _bounded_optional(value, "error_message", 2000)
-
-    @field_validator("input_paths", "output_paths")
-    @classmethod
-    def validate_paths(cls, value: list[str], info) -> list[str]:
-        return _bounded_path_entries(value, info.field_name)
