@@ -2,11 +2,10 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from app.main import create_app
-from tests.test_scripts_api import FakeScriptClient, create_project, write_reference_inputs
+from tests.test_scripts_api import Writer, setup
 
 
-class FactCheckingClient(FakeScriptClient):
+class FactCheckingClient(Writer):
     def analyze(self, prompt: str):
         if "판정 기준" in prompt:
             return {
@@ -20,14 +19,10 @@ class FactCheckingClient(FakeScriptClient):
 
 
 def finalized_client(tmp_path: Path) -> tuple[TestClient, str]:
-    (tmp_path / "config").mkdir()
-    (tmp_path / "config" / "local.settings.json").write_text('{"openai_api_key":"key"}', encoding="utf-8")
-    client = TestClient(create_app(repo_root=tmp_path, analysis_client_factory=FactCheckingClient))
-    project_id = create_project(client)
-    write_reference_inputs(tmp_path / "outputs" / project_id)
-    base = f"/api/projects/{project_id}/scripts"
+    client, project, _ = setup(tmp_path, writer=FactCheckingClient)
+    base = f"{project}/scripts"
     client.post(f"{base}/candidates")
-    client.post(f"{base}/select", json={"candidate_id": "different-topic-1"})
+    client.post(f"{base}/select", json={"candidate_id": "draft_b"})
     assert client.post(f"{base}/finalize", json={"feedback": ""}).status_code == 200
     return client, base
 
@@ -46,9 +41,8 @@ def test_direct_edit_saves_script_and_invalidates_fact_check(tmp_path: Path):
 
 
 def test_direct_edit_requires_finalized_script(tmp_path: Path):
-    client = TestClient(create_app(repo_root=tmp_path, analysis_client_factory=FactCheckingClient))
-    project_id = create_project(client)
+    client, project, _ = setup(tmp_path, writer=FactCheckingClient, with_reference=False)
 
-    response = client.put(f"/api/projects/{project_id}/scripts/final", json={"final_script": "대본"})
+    response = client.put(f"{project}/scripts/final", json={"final_script": "대본"})
 
     assert response.status_code == 400

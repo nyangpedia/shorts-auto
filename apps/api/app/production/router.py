@@ -24,7 +24,6 @@ from app.production.service import (
     generate_scene_video_for_project,
     generate_tts_for_project,
     get_production_state,
-    pass_continuity_frame_to_next_scene,
     refine_and_regenerate_scene,
     update_scene_prompts_for_project,
 )
@@ -94,19 +93,6 @@ def create_production_router(outputs_dir_provider: Callable[[], Path], settings_
             raise _bad_request(exc) from exc
         return state(path, project_id)
 
-    @router.post("/align")
-    def align_scenes(project_id: str, outputs: Path = Outputs, settings: AppSettings = Settings):
-        path = folder(outputs, project_id)
-        try:
-            with job(outputs, project_id, "production_align", "Align subtitles and split scenes", "Transcribing and aligning scenes",
-                     provider="faster-whisper", command=settings.whisper_model, inputs=[TTS_AUDIO_FILENAME, "final_script.md"]) as run:
-                align_subtitles_and_scenes_for_project(path, settings)
-                update_progress(outputs, project_id, steps=_NARRATION_DONE, files={"raw_stt": RAW_STT_FILENAME, "scene_data": SCENE_DATA_FILENAME})
-                run.succeed("Subtitles and scene data aligned successfully", [RAW_STT_FILENAME, SCENE_DATA_FILENAME])
-        except Exception as exc:
-            raise _bad_request(exc) from exc
-        return state(path, project_id)
-
     @router.get("/scenes/{filename}")
     def get_scene_file(project_id: str, filename: str, outputs: Path = Outputs):
         target = folder(outputs, project_id) / SCENES_DIR_NAME / filename
@@ -163,10 +149,6 @@ def create_production_router(outputs_dir_provider: Callable[[], Path], settings_
     def update_scene_prompts(project_id: str, scene_id: int, req: UpdateScenePromptsRequest, outputs: Path = Outputs):
         return scene_work(project_id, outputs, lambda path: update_scene_prompts_for_project(
             path, scene_id, start_image_prompt=req.start_image_prompt, video_prompt=req.video_prompt))
-
-    @router.post("/scenes/{scene_id}/pass-next")
-    def pass_continuity(project_id: str, scene_id: int, outputs: Path = Outputs):
-        return scene_work(project_id, outputs, lambda path: pass_continuity_frame_to_next_scene(path, scene_id))
 
     @router.post("/render")
     def render_shorts(project_id: str, req: RenderShortsRequest | None = None, outputs: Path = Outputs, settings: AppSettings = Settings):

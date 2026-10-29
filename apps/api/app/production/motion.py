@@ -67,12 +67,3 @@ def generate_scene_video_for_project(
         last_frame.write_bytes(start.read_bytes())
     return clip
 
-
-def pass_continuity_frame_to_next_scene(project_dir: Path, scene_id: int) -> Path:
-    """Use this scene's last frame as the next scene's picture."""
-    last_frame = scene_asset(project_dir, scene_id, "final")
-    if not last_frame.exists():
-        raise FileNotFoundError(f"{scene_id}번 씬의 마지막 프레임이 없습니다. 영상을 먼저 만들어주세요.")
-    next_picture = scene_asset(project_dir, scene_id + 1, "start")
-    next_picture.write_bytes(last_frame.read_bytes())
-    return next_picture
