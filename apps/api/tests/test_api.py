@@ -180,23 +180,3 @@ def test_invalid_job_payload_returns_422_for_unsafe_paths(tmp_path: Path):
 
     assert create_response.status_code == 422
     assert patch_response.status_code == 422
-
-
-def test_settings_status_exposes_key_presence_not_secret_values(tmp_path: Path):
-    config_dir = tmp_path / "config"
-    config_dir.mkdir()
-    (config_dir / "local.settings.json").write_text(
-        '{"openai_api_key":"openai-secret","youtube_api_key":"youtube-secret",'
-        '"higgsfield_api_key":"higgs-secret","reference_voice_text":"secret reference text"}',
-        encoding="utf-8",
-    )
-    client = TestClient(create_app(repo_root=tmp_path))
-
-    response = client.get("/api/settings/status")
-
-    assert response.status_code == 200
-    assert response.json()["openai_api_key"] is True
-    assert response.json()["youtube_api_key"] is True
-    assert response.json()["higgsfield_api_key"] is True
-    assert response.json()["reference_voice_text"] is True
-    assert "secret" not in response.text

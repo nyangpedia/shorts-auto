@@ -8,7 +8,6 @@ import type {
   ReferenceState,
   ScriptCandidate,
   ScriptsState,
-  SettingsStatus,
   TtsValidationResult,
   UpdateProjectPayload
 } from "./types";
@@ -43,10 +42,6 @@ export function createProject(projectTitle: string): Promise<Project> {
     method: "POST",
     body: JSON.stringify({ project_title: projectTitle })
   }).then((data) => data.project);
-}
-
-export function fetchSettingsStatus(): Promise<SettingsStatus> {
-  return request<SettingsStatus>("/api/settings/status");
 }
 
 export function updateProject(projectId: string, payload: UpdateProjectPayload): Promise<Project> {

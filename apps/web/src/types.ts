@@ -63,18 +63,6 @@ export interface ProjectResponse {
   readonly project: Project;
 }
 
-export interface SettingsStatus {
-  readonly openai_api_key: boolean;
-  readonly youtube_api_key: boolean;
-  readonly higgsfield_api_key: boolean;
-  readonly qwen3_tts_base_url: string;
-  readonly reference_voice_path: string;
-  readonly reference_voice_text: boolean;
-  readonly bgm_path: string;
-  readonly output_dir: string;
-  readonly bgm_volume: number;
-}
-
 export interface CreateProjectPayload {
   readonly project_title: string;
 }

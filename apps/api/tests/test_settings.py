@@ -35,15 +35,15 @@ def test_local_settings_override_env(tmp_path: Path, monkeypatch):
 def test_env_used_when_local_settings_missing(tmp_path: Path, monkeypatch):
     clear_settings_env(monkeypatch)
     (tmp_path / ".env").write_text(
-        "YOUTUBE_API_KEY=yt-env\nQWEN3_TTS_BASE_URL=http://127.0.0.1:7860\n",
+        "YOUTUBE_API_KEY=yt-env\nWHISPER_MODEL=small\nUSE_FASTER_WHISPER=false\nBGM_VOLUME=0.3\n",
         encoding="utf-8",
     )
 
     settings = load_settings(tmp_path)
 
     assert settings.youtube_api_key == "yt-env"
-    assert settings.qwen3_tts_base_url == "http://127.0.0.1:7860"
-    assert settings.default_shorts_duration_seconds == 45
+    assert settings.whisper_model == "small"
+    assert settings.use_faster_whisper is False and settings.bgm_volume == 0.3  # text from .env is typed
 
 
 def test_reference_phase_settings_have_safe_defaults(tmp_path, monkeypatch):
@@ -54,7 +54,6 @@ def test_reference_phase_settings_have_safe_defaults(tmp_path, monkeypatch):
     assert settings.openai_transcription_model == "whisper-1"
     assert settings.openai_analysis_model == "gpt-4.1-mini"
     assert settings.yt_dlp_binary == "yt-dlp"
-    assert settings.reference_audio_filename == "reference_audio.wav"
 
 
 def test_reference_phase_env_overrides(monkeypatch, tmp_path):
@@ -62,14 +61,12 @@ def test_reference_phase_env_overrides(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_TRANSCRIPTION_MODEL", "custom-transcribe")
     monkeypatch.setenv("OPENAI_ANALYSIS_MODEL", "custom-analysis")
     monkeypatch.setenv("YT_DLP_BINARY", "/usr/local/bin/yt-dlp")
-    monkeypatch.setenv("REFERENCE_AUDIO_FILENAME", "custom_reference.wav")
 
     settings = load_settings(tmp_path)
 
     assert settings.openai_transcription_model == "custom-transcribe"
     assert settings.openai_analysis_model == "custom-analysis"
     assert settings.yt_dlp_binary == "/usr/local/bin/yt-dlp"
-    assert settings.reference_audio_filename == "custom_reference.wav"
 
 
 @pytest.mark.parametrize("output_dir", ["/tmp/outputs", "../outputs", "safe/../outputs"])
