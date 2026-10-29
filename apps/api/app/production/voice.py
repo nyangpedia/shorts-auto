@@ -35,7 +35,10 @@ def _synthesize_gemini(script: str, settings: AppSettings, raw_path: Path) -> No
 
     if not settings.gemini_api_key:
         raise RuntimeError("Gemini API 키가 없습니다. 설정 화면에서 넣어주세요.")
-    reply = genai.Client(api_key=settings.gemini_api_key).interactions.create(
+    # Keep the client in a variable for the whole call: a throwaway Client() can be garbage-collected
+    # mid-request, which closes its connection ("Cannot send a request, as the client has been closed").
+    client = genai.Client(api_key=settings.gemini_api_key)
+    reply = client.interactions.create(
         model=settings.gemini_tts_model,
         input=[{
             "type": "user_input",
