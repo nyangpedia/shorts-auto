@@ -1,579 +1,203 @@
+"""YouTube client against a fake Data API: URL parsing, search, hydration and filters."""
 import httpx
 import pytest
 
 from app.references.models import ReferenceCandidate, ReferenceSearchRequest
 from app.references.youtube import (
-    date_windows,
     YouTubeClient,
+    date_windows,
     extract_youtube_channel_identifier,
     extract_youtube_video_id,
+    is_readable_channel,
+    is_readable_language,
     parse_iso8601_duration_seconds,
     sort_by_vs_ratio,
 )
 
-
-@pytest.mark.parametrize(
-    ("url", "video_id"),
-    [
-        ("https://www.youtube.com/watch?v=abc123DEF45", "abc123DEF45"),
-        ("https://youtu.be/abc123DEF45", "abc123DEF45"),
-        ("https://www.youtube.com/shorts/abc123DEF45", "abc123DEF45"),
-        ("https://m.youtube.com/watch?v=abc123DEF45&t=12s", "abc123DEF45"),
-    ],
-)
-def test_extract_youtube_video_id(url: str, video_id: str):
-    assert extract_youtube_video_id(url) == video_id
+CHANNEL = "UC1234567890123456789012"
+UPLOADS = "UU1234567890123456789012"
 
 
-def test_extract_youtube_video_id_rejects_invalid_url():
+def snippet(title: str, channel: str = "channel-1", published: str = "2026-10-01T00:00:00Z") -> dict:
+    return {"title": title, "channelId": channel, "channelTitle": "채널", "publishedAt": published,
+            "thumbnails": {"high": {"url": "https://example.com/t.jpg"}}}
+
+
+def vid(video_id: str, title: str = "검색 결과", duration: str = "PT45S", views: int = 120000, **snip) -> dict:
+    return {"id": video_id, "snippet": snippet(title, **snip), "contentDetails": {"duration": duration},
+            "statistics": {"viewCount": str(views)}}
+
+
+class FakeAPI(httpx.BaseTransport):
+    """Answers /search with `found(params)` ids and /videos, /channels from fixed tables. Records every call."""
+
+    def __init__(self, videos: list[dict] = (), subscribers: dict[str, int] | None = None, found=None, uploads=None):
+        self.videos = list(videos)
+        self.subscribers = subscribers or {"channel-1": 3000}
+        self.found = found or (lambda params: [v["id"] for v in self.videos])
+        self.uploads = uploads or []
+        self.calls: list[tuple[str, dict]] = []
+
+    def handle_request(self, request: httpx.Request) -> httpx.Response:
+        endpoint, params = request.url.path.rsplit("/", 1)[-1], dict(request.url.params)
+        self.calls.append((endpoint, params))
+        if endpoint == "search":
+            items = [{"id": {"videoId": i}} for i in self.found(params)]
+        elif endpoint == "videos":
+            items = self.videos
+        elif endpoint == "channels":
+            items = [{"id": cid, "statistics": {"subscriberCount": str(n)},
+                      "contentDetails": {"relatedPlaylists": {"uploads": UPLOADS}}} for cid, n in self.subscribers.items()]
+        elif endpoint == "playlistItems":
+            items = [{"contentDetails": {"videoId": i}, "snippet": {"publishedAt": "2026-10-01T00:00:00Z"}} for i in self.uploads]
+        else:
+            raise AssertionError(endpoint)
+        return httpx.Response(200, json={"items": items})
+
+    def client(self) -> YouTubeClient:
+        return YouTubeClient("key", http_client=httpx.Client(transport=self))
+
+    def params(self, endpoint: str) -> list[dict]:
+        return [p for e, p in self.calls if e == endpoint]
+
+
+# ── parsing ──
+
+@pytest.mark.parametrize("url", [
+    "https://www.youtube.com/watch?v=abc123DEF45",
+    "https://youtu.be/abc123DEF45",
+    "https://www.youtube.com/shorts/abc123DEF45",
+    "https://m.youtube.com/watch?v=abc123DEF45&t=12s",
+])
+def test_video_id_from_any_youtube_link(url):
+    assert extract_youtube_video_id(url) == "abc123DEF45"
+
+
+def test_video_id_rejects_other_sites():
     with pytest.raises(ValueError):
         extract_youtube_video_id("https://example.com/watch?v=abc123DEF45")
 
 
-@pytest.mark.parametrize(
-    ("duration", "seconds"),
-    [("PT45S", 45), ("PT1M5S", 65), ("PT1H2M3S", 3723), ("P1DT2H3M4S", 93784)],
-)
-def test_parse_iso8601_duration_seconds(duration: str, seconds: int):
-    assert parse_iso8601_duration_seconds(duration) == seconds
+@pytest.mark.parametrize("text,seconds", [("PT45S", 45), ("PT1M5S", 65), ("PT1H2M3S", 3723), ("P1DT2H3M4S", 93784)])
+def test_iso_durations(text, seconds):
+    assert parse_iso8601_duration_seconds(text) == seconds
 
 
-def candidate(video_id: str, views: int, subscribers: int | None) -> ReferenceCandidate:
-    return ReferenceCandidate(
-        video_id=video_id,
-        url=f"https://www.youtube.com/watch?v={video_id}",
-        title=video_id,
-        channel_id=f"channel-{video_id}",
-        channel_name="채널",
-        thumbnail_url="https://example.com/thumb.jpg",
-        upload_date="2026-10-01T00:00:00Z",
-        duration_seconds=45,
-        view_count=views,
-        subscriber_count=subscribers,
-        source_type="search",
-    )
+@pytest.mark.parametrize("query,kind,value", [
+    ("@creator", "handle", "@creator"),
+    ("https://www.youtube.com/@creator", "handle", "@creator"),
+    (f"https://www.youtube.com/channel/{CHANNEL}", "id", CHANNEL),
+    (CHANNEL, "id", CHANNEL),
+    ("슈카월드", "query", "슈카월드"),
+])
+def test_channel_identifier(query, kind, value):
+    assert extract_youtube_channel_identifier(query) == (kind, value)
 
 
-def test_sort_by_vs_ratio_puts_unavailable_ratio_last():
-    sorted_items = sort_by_vs_ratio(
-        [
-            candidate("low123DEF45", 1000, 1000),
-            candidate("non123DEF45", 100000, None),
-            candidate("hig123DEF45", 5000, 100),
-        ]
-    )
-
-    assert [item.video_id for item in sorted_items] == [
-        "hig123DEF45",
-        "low123DEF45",
-        "non123DEF45",
-    ]
+def test_ratio_sort_puts_unknown_subscribers_last():
+    def c(video_id, views, subs):
+        return ReferenceCandidate(video_id=video_id, url=f"https://www.youtube.com/watch?v={video_id}", title=video_id,
+                                  channel_id="c", channel_name="채널", thumbnail_url="https://example.com/t.jpg", upload_date="2026-10-01T00:00:00Z",
+                                  duration_seconds=45, view_count=views, subscriber_count=subs, source_type="search")
+    ordered = sort_by_vs_ratio([c("low", 1000, 1000), c("none", 100000, None), c("high", 5000, 100)])
+    assert [x.video_id for x in ordered] == ["high", "low", "none"]
 
 
-class FakeTransport(httpx.BaseTransport):
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        if "search" in url:
-            return httpx.Response(
-                200,
-                json={
-                    "items": [
-                        {
-                            "id": {"videoId": "abc123DEF45"},
-                            "snippet": {
-                                "title": "검색 결과",
-                                "channelId": "channel-1",
-                                "channelTitle": "채널",
-                                "publishedAt": "2026-10-01T00:00:00Z",
-                                "thumbnails": {
-                                    "default": {"url": "https://example.com/thumb.jpg"}
-                                },
-                            },
-                        }
-                    ]
-                },
-            )
-        if "videos" in url:
-            return httpx.Response(
-                200,
-                json={
-                    "items": [
-                        {
-                            "id": "abc123DEF45",
-                            "snippet": {
-                                "title": "검색 결과",
-                                "channelId": "channel-1",
-                                "channelTitle": "채널",
-                                "publishedAt": "2026-10-01T00:00:00Z",
-                                "thumbnails": {
-                                    "default": {"url": "https://example.com/thumb.jpg"}
-                                },
-                            },
-                            "contentDetails": {"duration": "PT45S"},
-                            "statistics": {"viewCount": "120000"},
-                        }
-                    ]
-                },
-            )
-        if "channels" in url:
-            return httpx.Response(
-                200,
-                json={"items": [{"id": "channel-1", "statistics": {"subscriberCount": "3000"}}]},
-            )
-        raise AssertionError(url)
+def test_date_range_splits_into_weeks_counting_back():
+    request = ReferenceSearchRequest(keyword="과학", published_after="2026-08-01", published_before="2026-08-15")
+    assert date_windows(request) == [("2026-08-01", "2026-08-01"), ("2026-08-02", "2026-08-08"), ("2026-08-09", "2026-08-15")]
 
 
-class EmptyDirectTransport(httpx.BaseTransport):
-    def handle_request(self, request: httpx.Request) -> httpx.Response:
-        url = str(request.url)
-        if "videos" in url:
-            return httpx.Response(200, json={"items": []})
-        if "channels" in url:
-            return httpx.Response(200, json={"items": []})
-        raise AssertionError(url)
+# ── search ──
+
+def test_search_fills_in_duration_views_and_subscribers():
+    [hit] = FakeAPI([vid("abc123DEF45")]).client().search(ReferenceSearchRequest(keyword="테스트"))
+    assert (hit.video_id, hit.duration_seconds, hit.view_count, hit.subscriber_count, hit.vs_ratio) == ("abc123DEF45", 45, 120000, 3000, 40)
 
 
-def test_youtube_client_search_hydrates_metadata():
-    client = YouTubeClient("key", http_client=httpx.Client(transport=FakeTransport()))
-
-    results = client.search(ReferenceSearchRequest(keyword="테스트"))
-
-    assert results[0].video_id == "abc123DEF45"
-    assert results[0].duration_seconds == 45
-    assert results[0].view_count == 120000
-    assert results[0].subscriber_count == 3000
-    assert results[0].vs_ratio == 40
+def test_over_five_minutes_filter():
+    api = FakeAPI([vid("abc123DEF45", "짧은 영상"), vid("xyz987ABCDE", "긴 영상", duration="PT6M1S", views=90000)])
+    results = api.client().search(ReferenceSearchRequest(keyword="테스트", duration_filter="over_300"))
+    assert [r.video_id for r in results] == ["xyz987ABCDE"]
 
 
-def test_youtube_client_search_supports_over_five_minute_duration_filter():
-    class LongVideoTransport(FakeTransport):
-        def handle_request(self, request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "search" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {"id": {"videoId": "abc123DEF45"}},
-                            {"id": {"videoId": "xyz987ABCDE"}},
-                        ]
-                    },
-                )
-            if "videos" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {
-                                "id": "abc123DEF45",
-                                "snippet": {
-                                    "title": "짧은 영상",
-                                    "channelId": "channel-1",
-                                    "channelTitle": "채널",
-                                    "publishedAt": "2026-10-01T00:00:00Z",
-                                    "thumbnails": {"high": {"url": "https://example.com/short.jpg"}},
-                                },
-                                "contentDetails": {"duration": "PT45S"},
-                                "statistics": {"viewCount": "120000"},
-                            },
-                            {
-                                "id": "xyz987ABCDE",
-                                "snippet": {
-                                    "title": "긴 영상",
-                                    "channelId": "channel-1",
-                                    "channelTitle": "채널",
-                                    "publishedAt": "2026-10-01T00:00:00Z",
-                                    "thumbnails": {"high": {"url": "https://example.com/long.jpg"}},
-                                },
-                                "contentDetails": {"duration": "PT6M1S"},
-                                "statistics": {"viewCount": "90000"},
-                            },
-                        ]
-                    },
-                )
-            return super().handle_request(request)
-
-    client = YouTubeClient("key", http_client=httpx.Client(transport=LongVideoTransport()))
-
-    results = client.search(ReferenceSearchRequest(keyword="테스트", duration_filter="over_300"))
-
-    assert [item.video_id for item in results] == ["xyz987ABCDE"]
-
-
-def test_date_windows_split_backwards_into_seven_day_windows():
-    windows = date_windows(
-        ReferenceSearchRequest(
-            keyword="과학",
-            published_after="2026-08-01",
-            published_before="2026-08-15",
-        )
-    )
-
-    assert windows == [
-        ("2026-08-01", "2026-08-01"),
-        ("2026-08-02", "2026-08-08"),
-        ("2026-08-09", "2026-08-15"),
-    ]
-
-
-def test_youtube_client_search_splits_long_date_ranges_before_filtering():
-    class DateWindowTransport(httpx.BaseTransport):
-        def handle_request(self, request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "search" in url:
-                after = request.url.params.get("publishedAfter")
-                before = request.url.params.get("publishedBefore")
-                if after == "2026-08-01T00:00:00Z" and before == "2026-08-01T23:59:59Z":
-                    return httpx.Response(200, json={"items": [{"id": {"videoId": "day123DEF45"}}]})
-                if after == "2026-08-02T00:00:00Z" and before == "2026-08-08T23:59:59Z":
-                    return httpx.Response(200, json={"items": [{"id": {"videoId": "week12DEF45"}}]})
-                if after == "2026-08-09T00:00:00Z" and before == "2026-08-15T23:59:59Z":
-                    return httpx.Response(200, json={"items": [{"id": {"videoId": "week23DEF45"}}]})
-                return httpx.Response(200, json={"items": []})
-            if "videos" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {
-                                "id": "day123DEF45",
-                                "snippet": {
-                                    "title": "첫날 영상",
-                                    "channelId": "channel-1",
-                                    "channelTitle": "채널",
-                                    "publishedAt": "2026-08-01T00:00:00Z",
-                                    "thumbnails": {"high": {"url": "https://example.com/day.jpg"}},
-                                },
-                                "contentDetails": {"duration": "PT45S"},
-                                "statistics": {"viewCount": "9000"},
-                            },
-                            {
-                                "id": "week12DEF45",
-                                "snippet": {
-                                    "title": "첫째 주 영상",
-                                    "channelId": "channel-1",
-                                    "channelTitle": "채널",
-                                    "publishedAt": "2026-08-08T00:00:00Z",
-                                    "thumbnails": {"high": {"url": "https://example.com/week1.jpg"}},
-                                },
-                                "contentDetails": {"duration": "PT45S"},
-                                "statistics": {"viewCount": "30000"},
-                            },
-                            {
-                                "id": "week23DEF45",
-                                "snippet": {
-                                    "title": "둘째 주 영상",
-                                    "channelId": "channel-1",
-                                    "channelTitle": "채널",
-                                    "publishedAt": "2026-08-15T00:00:00Z",
-                                    "thumbnails": {"high": {"url": "https://example.com/week2.jpg"}},
-                                },
-                                "contentDetails": {"duration": "PT45S"},
-                                "statistics": {"viewCount": "12000"},
-                            },
-                        ]
-                    },
-                )
-            if "channels" in url:
-                return httpx.Response(
-                    200,
-                    json={"items": [{"id": "channel-1", "statistics": {"subscriberCount": "1000"}}]},
-                )
-            raise AssertionError(url)
-
-    client = YouTubeClient("key", http_client=httpx.Client(transport=DateWindowTransport()))
-
-    results = client.search(
-            ReferenceSearchRequest(
-                keyword="과학",
-                published_after="2026-08-01",
-                published_before="2026-08-15",
-                max_results=50,
-            )
-        )
-
-    assert {item.video_id for item in results} == {
-        "day123DEF45",
-        "week12DEF45",
-        "week23DEF45",
+def test_long_date_range_searches_each_window():
+    windows = {
+        ("2026-08-01T00:00:00Z", "2026-08-01T23:59:59Z"): "day123DEF45",
+        ("2026-08-02T00:00:00Z", "2026-08-08T23:59:59Z"): "week12DEF45",
+        ("2026-08-09T00:00:00Z", "2026-08-15T23:59:59Z"): "week23DEF45",
     }
+    hit = windows.get
+    api = FakeAPI(
+        [vid("day123DEF45", views=9000, published="2026-08-01T00:00:00Z"),
+         vid("week12DEF45", views=30000, published="2026-08-08T00:00:00Z"),
+         vid("week23DEF45", views=12000, published="2026-08-15T00:00:00Z")],
+        subscribers={"channel-1": 1000},
+        found=lambda p: [i] if (i := hit((p.get("publishedAfter"), p.get("publishedBefore")))) else [],
+    )
+    request = ReferenceSearchRequest(keyword="과학", published_after="2026-08-01", published_before="2026-08-15", max_results=50)
+    assert {r.video_id for r in api.client().search(request)} == set(windows.values())
 
 
-def test_youtube_client_direct_raises_controlled_error_when_video_missing():
-    client = YouTubeClient("key", http_client=httpx.Client(transport=EmptyDirectTransport()))
+def test_items_missing_metadata_are_skipped():
+    api = FakeAPI([{"id": "bad123DEF45"}, vid("abc123DEF45")])
+    assert [r.video_id for r in api.client().search(ReferenceSearchRequest(keyword="테스트"))] == ["abc123DEF45"]
 
+
+def test_direct_link_to_a_missing_video():
     with pytest.raises(ValueError, match="not found or unavailable"):
-        client.get_direct("https://www.youtube.com/watch?v=abc123DEF45")
+        FakeAPI(subscribers={}).client().get_direct("https://www.youtube.com/watch?v=abc123DEF45")
 
 
-def test_youtube_client_search_skips_partial_items():
-    class PartialTransport(httpx.BaseTransport):
-        def handle_request(self, request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "search" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {"id": {"videoId": "bad123DEF45"}},
-                            {
-                                "id": {"videoId": "abc123DEF45"},
-                                "snippet": {
-                                    "title": "검색 결과",
-                                    "channelId": "channel-1",
-                                    "channelTitle": "채널",
-                                    "publishedAt": "2026-10-01T00:00:00Z",
-                                    "thumbnails": {
-                                        "default": {"url": "https://example.com/thumb.jpg"}
-                                    },
-                                },
-                            },
-                        ]
-                    },
-                )
-            if "videos" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {"id": "bad123DEF45"},
-                            {
-                                "id": "abc123DEF45",
-                                "snippet": {
-                                    "title": "검색 결과",
-                                    "channelId": "channel-1",
-                                    "channelTitle": "채널",
-                                    "publishedAt": "2026-10-01T00:00:00Z",
-                                    "thumbnails": {
-                                        "default": {"url": "https://example.com/thumb.jpg"}
-                                    },
-                                },
-                                "contentDetails": {"duration": "PT45S"},
-                                "statistics": {"viewCount": "120000"},
-                            },
-                        ]
-                    },
-                )
-            if "channels" in url:
-                return httpx.Response(
-                    200,
-                    json={"items": [{"id": "channel-1", "statistics": {"subscriberCount": "3000"}}]},
-                )
-            raise AssertionError(url)
-
-    client = YouTubeClient("key", http_client=httpx.Client(transport=PartialTransport()))
-
-    results = client.search(ReferenceSearchRequest(keyword="테스트"))
-
-    assert [item.video_id for item in results] == ["abc123DEF45"]
+def test_channel_only_lists_its_uploads():
+    api = FakeAPI([vid("chan123DEF45", "채널 업로드 영상", duration="PT50S", views=150000, channel=CHANNEL)],
+                  subscribers={CHANNEL: 50000}, uploads=["chan123DEF45"])
+    [hit] = api.client().search(ReferenceSearchRequest(channel_query="@creator"))
+    assert (hit.video_id, hit.title, hit.vs_ratio) == ("chan123DEF45", "채널 업로드 영상", 3.0)
+    assert api.params("playlistItems")[0]["playlistId"] == UPLOADS
 
 
-@pytest.mark.parametrize(
-    ("query", "expected_type", "expected_value"),
-    [
-        ("@creator", "handle", "@creator"),
-        ("https://www.youtube.com/@creator", "handle", "@creator"),
-        ("https://www.youtube.com/channel/UC1234567890123456789012", "id", "UC1234567890123456789012"),
-        ("UC1234567890123456789012", "id", "UC1234567890123456789012"),
-        ("슈카월드", "query", "슈카월드"),
-    ],
-)
-def test_extract_youtube_channel_identifier(query: str, expected_type: str, expected_value: str):
-    kind, value = extract_youtube_channel_identifier(query)
-    assert kind == expected_type
-    assert value == expected_value
+def test_channel_plus_keyword_searches_inside_the_channel():
+    api = FakeAPI([vid("filt123DEF45", duration="PT30S", views=50000, channel=CHANNEL)], subscribers={CHANNEL: 10000})
+    [hit] = api.client().search(ReferenceSearchRequest(keyword="투자", channel_query=CHANNEL))
+    assert hit.video_id == "filt123DEF45"
+    assert api.params("search")[0]["channelId"] == CHANNEL and api.params("search")[0]["q"] == "투자"
 
 
-def test_youtube_client_search_by_channel_only():
-    class ChannelOnlyTransport(httpx.BaseTransport):
-        def handle_request(self, request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "channels" in url:
-                params = request.url.params
-                if params.get("forHandle") in ("creator", "@creator") or params.get("id") == "UC1234567890123456789012":
-                    return httpx.Response(
-                        200,
-                        json={
-                            "items": [
-                                {
-                                    "id": "UC1234567890123456789012",
-                                    "contentDetails": {
-                                        "relatedPlaylists": {
-                                            "uploads": "UU1234567890123456789012"
-                                        }
-                                    },
-                                    "statistics": {"subscriberCount": "50000"},
-                                }
-                            ]
-                        },
-                    )
-            if "playlistItems" in url:
-                params = request.url.params
-                if params.get("playlistId") == "UU1234567890123456789012":
-                    return httpx.Response(
-                        200,
-                        json={
-                            "items": [
-                                {
-                                    "contentDetails": {
-                                        "videoId": "chan123DEF45",
-                                    },
-                                    "snippet": {
-                                        "publishedAt": "2026-10-01T00:00:00Z",
-                                    },
-                                }
-                            ]
-                        },
-                    )
-            if "videos" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {
-                                "id": "chan123DEF45",
-                                "snippet": {
-                                    "title": "채널 업로드 영상",
-                                    "channelId": "UC1234567890123456789012",
-                                    "channelTitle": "크리에이터",
-                                    "publishedAt": "2026-10-01T00:00:00Z",
-                                    "thumbnails": {
-                                        "high": {"url": "https://example.com/chan.jpg"}
-                                    },
-                                },
-                                "contentDetails": {"duration": "PT50S"},
-                                "statistics": {"viewCount": "150000"},
-                            }
-                        ]
-                    },
-                )
-            raise AssertionError(f"Unexpected URL: {url}")
-
-    client = YouTubeClient("key", http_client=httpx.Client(transport=ChannelOnlyTransport()))
-    results = client.search(ReferenceSearchRequest(channel_query="@creator"))
-
-    assert len(results) == 1
-    assert results[0].video_id == "chan123DEF45"
-    assert results[0].title == "채널 업로드 영상"
-    assert results[0].vs_ratio == 3.0  # 150000 / 50000
+def test_search_request_shape():
+    api = FakeAPI(found=lambda p: [])
+    api.client().search(ReferenceSearchRequest(keyword="돈", duration_filter="under_180"))
+    api.client().search(ReferenceSearchRequest(keyword="돈", duration_filter="under_300"))
+    first, last = api.params("search")[0], api.params("search")[-1]
+    assert first["videoDuration"] == "short" and first["maxResults"] == "50"
+    assert "regionCode" not in first  # worldwide
+    assert "videoDuration" not in last  # YouTube's "short" is under 4 minutes
 
 
-def test_youtube_client_search_by_channel_and_keyword():
-    recorded_search_params = {}
-
-    class ChannelKeywordTransport(httpx.BaseTransport):
-        def handle_request(self, request: httpx.Request) -> httpx.Response:
-            url = str(request.url)
-            if "channels" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {
-                                "id": "UC1234567890123456789012",
-                                "statistics": {"subscriberCount": "10000"},
-                            }
-                        ]
-                    },
-                )
-            if "search" in url:
-                nonlocal recorded_search_params
-                recorded_search_params = dict(request.url.params)
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {"id": {"videoId": "filt123DEF45"}}
-                        ]
-                    },
-                )
-            if "videos" in url:
-                return httpx.Response(
-                    200,
-                    json={
-                        "items": [
-                            {
-                                "id": "filt123DEF45",
-                                "snippet": {
-                                    "title": "필터링 영상",
-                                    "channelId": "UC1234567890123456789012",
-                                    "channelTitle": "크리에이터",
-                                    "publishedAt": "2026-10-01T00:00:00Z",
-                                    "thumbnails": {
-                                        "high": {"url": "https://example.com/filt.jpg"}
-                                    },
-                                },
-                                "contentDetails": {"duration": "PT30S"},
-                                "statistics": {"viewCount": "50000"},
-                            }
-                        ]
-                    },
-                )
-            raise AssertionError(f"Unexpected URL: {url}")
-
-    client = YouTubeClient("key", http_client=httpx.Client(transport=ChannelKeywordTransport()))
-    results = client.search(ReferenceSearchRequest(keyword="투자", channel_query="UC1234567890123456789012"))
-
-    assert len(results) == 1
-    assert results[0].video_id == "filt123DEF45"
-    assert recorded_search_params.get("channelId") == "UC1234567890123456789012"
-    assert recorded_search_params.get("q") == "투자"
+def test_each_comma_keyword_is_its_own_search():
+    api = FakeAPI(found=lambda p: [])
+    api.client().search(ReferenceSearchRequest(keyword="실화 썰, true story ,実話,,a,b,c,d,e,f,g"))
+    assert [p["q"] for p in api.params("search")] == ["실화 썰", "true story", "実話", "a", "b", "c", "d", "e", "f"]  # capped at 9
 
 
+# ── language filters ──
 
-def test_search_asks_youtube_for_short_korean_videos_in_one_full_page():
-    seen = []
-
-    class Capture(httpx.BaseTransport):
-        def handle_request(self, request):
-            seen.append(dict(request.url.params))
-            return httpx.Response(200, json={"items": []})
-
-    client = YouTubeClient("key", http_client=httpx.Client(transport=Capture()))
-    client.search(ReferenceSearchRequest(keyword="돈", duration_filter="under_180"))
-    client.search(ReferenceSearchRequest(keyword="돈", duration_filter="under_300"))
-    assert seen[0]["videoDuration"] == "short" and seen[0]["maxResults"] == "50"
-    assert "regionCode" not in seen[0]  # references are searched worldwide
-    assert "videoDuration" not in seen[-1]
-
-
-@pytest.mark.parametrize(
-    ("snippet", "keep"),
-    [
-        ({"title": "돈이 모이는 습관", "defaultAudioLanguage": "ko"}, True),
-        ({"title": "5 Habits to 10x your Money"}, True),
-        ({"title": "お金が貯まる習慣", "defaultAudioLanguage": "ja"}, True),
-        ({"title": "理财习惯", "defaultAudioLanguage": "zh-Hans"}, True),
-        ({"title": "Money habits in English title", "defaultAudioLanguage": "hi"}, False),
-        ({"title": "డబ్బు సంపాదించే 6 పనులు"}, False),
-        ({"title": "पैसे की आदतें"}, False),
-        ({"title": "Unknown language", "defaultAudioLanguage": "und"}, True),
-    ],
-)
-def test_search_keeps_only_readable_reference_languages(snippet, keep):
-    from app.references.youtube import is_readable_language
-
-    assert is_readable_language(snippet) is keep
+@pytest.mark.parametrize("snip,keep", [
+    ({"title": "돈이 모이는 습관", "defaultAudioLanguage": "ko"}, True),
+    ({"title": "5 Habits to 10x your Money"}, True),
+    ({"title": "お金が貯まる習慣", "defaultAudioLanguage": "ja"}, True),
+    ({"title": "理财习惯", "defaultAudioLanguage": "zh-Hans"}, True),
+    ({"title": "Unknown language", "defaultAudioLanguage": "und"}, True),
+    ({"title": "Money habits in English title", "defaultAudioLanguage": "hi"}, False),
+    ({"title": "డబ్బు సంపాదించే 6 పనులు"}, False),
+    ({"title": "पैसे की आदतें"}, False),
+])
+def test_readable_languages(snip, keep):
+    assert is_readable_language(snip) is keep
 
 
-def test_channel_country_or_script_excludes_mislabelled_videos():
-    from app.references.youtube import is_readable_channel
-
+def test_channel_country_and_script():
     assert is_readable_channel({"country": "US", "description": "Money tips"})
     assert is_readable_channel({})
     assert not is_readable_channel({"country": "IN", "description": "Money tips"})
     assert not is_readable_channel({"description": "డబ్బు చిట్కాలు"})
-
-
-def test_comma_separated_keywords_run_one_search_each():
-    queries = []
-
-    class Capture(httpx.BaseTransport):
-        def handle_request(self, request):
-            if request.url.path.endswith("/search"):
-                queries.append(request.url.params["q"])
-            return httpx.Response(200, json={"items": []})
-
-    client = YouTubeClient("key", http_client=httpx.Client(transport=Capture()))
-    client.search(ReferenceSearchRequest(keyword="실화 썰, true story ,実話,,a,b,c,d,e,f,g"))
-    assert queries == ["실화 썰", "true story", "実話", "a", "b", "c", "d", "e", "f"]  # trimmed, empties dropped, capped at 9
