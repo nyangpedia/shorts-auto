@@ -33,6 +33,7 @@ from app.references.files import (
     read_reference_state,
     read_selected_reference,
     write_reference_candidates,
+    write_reference_script,
     write_selected_reference,
 )
 from app.references.models import DirectReferenceRequest, ReferenceCandidate, ReferenceSearchRequest, SelectReferenceRequest
@@ -83,6 +84,20 @@ def add_korean_titles(candidates: list[ReferenceCandidate], make_client: Callabl
 
 def _error_text(exc: Exception) -> str:
     return str(exc) or type(exc).__name__
+
+
+MIN_SPEECH_CHARS = 15  # less than this is noise, not narration
+
+
+def silent_video_script(reference) -> str:
+    """Stand-in script for a video without speech: its title, flagged so the analysis doesn't invent lines."""
+    if reference is None:
+        raise ValueError("말소리를 찾지 못했습니다. 내레이션이 있는 영상을 고르세요.")
+    gloss = f" ({reference.title_ko})" if reference.title_ko else ""
+    return (
+        "[내레이션 없는 영상: 음악과 화면 자막만 있음. 대본 인용을 지어내지 말고, 제목이 던지는 질문과 소재로만 분석할 것]\n"
+        f"제목: {reference.title}{gloss}"
+    )
 
 
 def create_references_router(
@@ -249,10 +264,16 @@ def create_references_router(
                 update_progress(outputs, project_id, current="STT", steps={"STT": ("running", "Running OpenAI STT.")})
                 raw = transcription_client_factory(settings.openai_api_key, settings.openai_transcription_model).transcribe(audio)
                 script = write_reference_stt_outputs(path, raw)
+                stt_note = "Reference STT complete."
+                if len(script) < MIN_SPEECH_CHARS:
+                    # music-only videos (common for "what if" simulations): analyse the title instead of an empty script
+                    script = silent_video_script(read_selected_reference(path))
+                    write_reference_script(path, script + "\n")
+                    stt_note = "말소리가 없는 영상이라 제목으로 분석합니다."
                 clear_reference_analysis_outputs(path)
                 update_progress(
                     outputs, project_id, current="Analysis",
-                    steps={"STT": ("succeeded", "Reference STT complete."),
+                    steps={"STT": ("succeeded", stt_note),
                            "Analysis": ("waiting", "Reference script is ready for analysis.")},
                     reset=AFTER_ANALYSIS,
                     files={"reference_raw_stt": REFERENCE_RAW_STT_FILE, "reference_script": REFERENCE_SCRIPT_FILE},
@@ -275,6 +296,9 @@ def create_references_router(
             script_path = path / REFERENCE_SCRIPT_FILE
             if not script_path.exists():
                 raise HTTPException(status_code=400, detail="Reference script is missing")
+            if not script_path.read_text(encoding="utf-8").strip():
+                # an empty script makes the model invent a topic; never send one
+                raise HTTPException(status_code=400, detail="레퍼런스 대본이 비어 있습니다. 대본 추출을 다시 하거나 다른 영상을 고르세요.")
             with job(outputs, project_id, "reference_analysis", "Analyze reference script", "Analyzing reference script",
                      provider="openai", command=settings.openai_analysis_model, inputs=[REFERENCE_SCRIPT_FILE]) as run:
                 started = True

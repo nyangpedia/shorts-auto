@@ -56,7 +56,7 @@ def transcriber(result=None, error: str | None = None):
         def transcribe(self, audio_path):
             if error:
                 raise RuntimeError(error)
-            return result or {"text": "첫 문장입니다.", "segments": [{"start": 0, "end": 1, "text": "첫 문장입니다."}]}
+            return result or {"text": "첫 문장입니다. 이 영상은 아주 짧지 않습니다.", "segments": [{"start": 0, "end": 1, "text": "첫 문장입니다. 이 영상은 아주 짧지 않습니다."}]}
     return Client
 
 
@@ -240,7 +240,7 @@ def test_transcribe_writes_script_and_moves_on(tmp_path: Path):
     (s.dir / "reference_audio.wav").write_bytes(b"audio")
     s.seed(reference_analysis__json='{"old":true}', reference_analysis__md="old")
 
-    assert s.post("/stt").json()["reference_script"] == "첫 문장입니다."
+    assert s.post("/stt").json()["reference_script"] == "첫 문장입니다. 이 영상은 아주 짧지 않습니다."
     project = s.project()
     assert project["generated_files"]["reference_raw_stt"] == "reference_raw_stt.json"
     assert project["generated_files"]["reference_script"] == "reference_script.md"
@@ -352,3 +352,33 @@ def test_analysis_missing_fields_is_rejected(tmp_path: Path):
     response = s.post("/analyze")
     assert response.status_code == 400 and "Field required" in response.json()["detail"]
     assert s.last_job()["state"] == "failed"
+
+
+def test_video_without_speech_is_analysed_by_its_title(tmp_path: Path):
+    seen = []
+
+    class Recorder:
+        def __init__(self, api_key, model):
+            pass
+
+        def analyze(self, prompt):
+            seen.append(prompt)
+            return ANALYSIS
+
+    s = Setup(tmp_path, KEYED, audio_extractor=extracted, transcription_client_factory=transcriber({"text": "", "segments": []}),
+              analysis_client_factory=Recorder)
+    s.post("/search", json={"keyword": "돈"})
+    s.post("/select", json={"video_id": "highratio1"})
+
+    script = s.post("/stt").json()["reference_script"]
+    assert "내레이션 없는 영상" in script and "highratio1" in script  # the title stands in for the empty transcript
+    assert step(s.project(), "STT") == ("succeeded", "말소리가 없는 영상이라 제목으로 분석합니다.")
+    assert s.post("/analyze").status_code == 200
+    assert "highratio1" in seen[0]
+
+
+def test_empty_script_is_never_analysed(tmp_path: Path):
+    s = Setup(tmp_path, KEYED, analysis_client_factory=analyzer())
+    s.seed(reference_script__md="\n")
+    response = s.post("/analyze")
+    assert response.status_code == 400 and "비어 있습니다" in response.json()["detail"]
