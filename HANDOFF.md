@@ -13,7 +13,7 @@
 | 자막/STT | Faster-Whisper (CPU, base) | `av<18` 고정 필수 |
 | 대본/분석 | Gemini `gemini-3.5-flash` | 무료 한도 **모델당 하루 ~20회**(영상 1편에 5~6회) → `LLM_FALLBACK_MODELS` 순서로 자동 전환 |
 | 음성 | Gemini TTS `gemini-3.8-flash-tts`, 음성 Kore | edge / qwen3도 선택 가능 (`TTS_PROVIDER`) |
-| 이미지 | `cloudflare` (Workers AI FLUX schnell, **하루 약 70장**, 24시간 롤링 — 대시보드 0이어도 429 code 4006이면 소진) | 정사각형 출력 → 9:16로 크롭. 일시적 400은 자동 재시도 |
+| 이미지 | `cloudflare` (Workers AI **FLUX.2 klein 768x1344 세로 그대로**, 실패 시 flux-1-schnell 정사각형→가운데 크롭; **하루 약 70장**, 24시간 롤링 — 대시보드 0이어도 429 code 4006이면 소진) | 일시적 400은 자동 재시도 |
 | 화풍 | 7종 선택 (`app/production/styles.py`) | 제작 패널 "화풍" + [씬 구성하기]. 기본값 `VISUAL_STYLE` |
 | 영상 | `parallax` 2.5D 입체 모션(기본, 깊이 모델 Depth Anything V2 small) 또는 `kenburns` + HyperFrames 모션그래픽 | 씬 전환 펀치줌·플래시, 자막 숫자 노란 강조, 상단 진행 바 |
 | 렌더링 | HyperFrames 0.8.214 (`apps/video/shorts.html`, WAAPI 애니메이션, 텔레메트리 끔) | 50초 영상 약 5분(CPU) |
