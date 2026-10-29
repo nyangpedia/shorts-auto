@@ -1,433 +1,131 @@
+// Every call to the API in one place. All responses are JSON; a non-2xx reply throws with the API's message.
 import type {
+  DailyState,
+  FinalScriptState,
+  KeyStatus,
   ProductionState,
   Project,
-  ProjectResponse,
-  ProjectsResponse,
   ReferenceCandidate,
   ReferenceSearchPayload,
   ReferenceState,
   ScriptCandidate,
   ScriptsState,
-  TtsValidationResult,
-  UpdateProjectPayload
+  TopicItem,
+  TopicListing,
+  UpdateProjectPayload,
+  UsageToday,
+  YouTubeStatus,
+  YouTubeUploadResult
 } from "./types";
 
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
+export type { DailyItem, DailyState, TopicItem, TopicListing, TrendPoint, UsageToday, YouTubeStatus, YouTubeUploadResult } from "./types";
+
+async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const response = await fetch(path, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers
-    }
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: body === undefined ? undefined : JSON.stringify(body)
   });
-
   if (!response.ok) {
-    const detail = await response.text();
-    throw new Error(detail || `Request failed with ${response.status}`);
+    throw new Error((await response.text()) || `Request failed with ${response.status}`);
   }
-
   return response.json() as Promise<T>;
 }
 
-export function fetchProjects(): Promise<readonly Project[]> {
-  return request<ProjectsResponse>("/api/projects").then((data) => data.projects);
-}
+const get = <T>(path: string) => call<T>("GET", path);
+const post = <T>(path: string, body?: unknown) => call<T>("POST", path, body);
+const put = <T>(path: string, body: unknown) => call<T>("PUT", path, body);
 
-export function getProject(projectId: string): Promise<Project> {
-  return request<ProjectResponse>(`/api/projects/${encodeURIComponent(projectId)}`).then((data) => data.project);
-}
+/** /api/projects/<id><rest> with the id escaped. */
+const p = (projectId: string, rest = "") => `/api/projects/${encodeURIComponent(projectId)}${rest}`;
+const qs = (params: Record<string, string | number | boolean | undefined>) =>
+  Object.entries(params)
+    .filter(([, v]) => v !== undefined)
+    .map(([k, v]) => `${k}=${encodeURIComponent(String(v))}`)
+    .join("&");
 
-export function createProject(projectTitle: string): Promise<Project> {
-  return request<ProjectResponse>("/api/projects", {
-    method: "POST",
-    body: JSON.stringify({ project_title: projectTitle })
-  }).then((data) => data.project);
-}
+// ── projects ──
+export const fetchProjects = () => get<{ projects: readonly Project[] }>("/api/projects").then((r) => r.projects);
+export const getProject = (projectId: string) => get<{ project: Project }>(p(projectId)).then((r) => r.project);
+export const createProject = (projectTitle: string) =>
+  post<{ project: Project }>("/api/projects", { project_title: projectTitle }).then((r) => r.project);
+export const updateProject = (projectId: string, payload: UpdateProjectPayload) =>
+  call<{ project: Project }>("PATCH", p(projectId), payload).then((r) => r.project);
+export const deleteProject = (projectId: string) => call<unknown>("DELETE", p(projectId));
 
-export function updateProject(projectId: string, payload: UpdateProjectPayload): Promise<Project> {
-  return request<ProjectResponse>(`/api/projects/${encodeURIComponent(projectId)}`, {
-    method: "PATCH",
-    body: JSON.stringify(payload)
-  }).then((data) => data.project);
-}
-
-export interface YouTubeStatus {
-  readonly configured: boolean;
-  readonly connected: boolean;
-}
-
-export interface YouTubeUploadResult {
-  readonly video_id: string;
-  readonly url: string;
-  readonly studio_url: string;
-}
-
-export function fetchKeyStatus(): Promise<{ keys: Readonly<Record<string, boolean>> }> {
-  return request("/api/settings/keys");
-}
-
-/** Keys go to the server's .env; the response only says which are set. "" clears one. */
-export function saveKeys(values: Readonly<Record<string, string>>): Promise<{ keys: Readonly<Record<string, boolean>> }> {
-  return request("/api/settings/keys", { method: "PUT", body: JSON.stringify({ values }) });
-}
-
-export function saveClientSecret(content: string): Promise<YouTubeStatus> {
-  return request("/api/youtube/client-secret", { method: "PUT", body: JSON.stringify({ content }) });
-}
-
-export function disconnectYouTube(): Promise<YouTubeStatus> {
-  return request("/api/youtube/connection", { method: "DELETE" });
-}
-
-export function fetchYouTubeStatus(): Promise<YouTubeStatus> {
-  return request("/api/youtube/status");
-}
-
-export function fetchYouTubeAuthUrl(): Promise<{ auth_url: string }> {
-  return request("/api/youtube/connect");
-}
-
-export function uploadToYouTube(
-  projectId: string,
-  payload: { title: string; description: string; tags: string }
-): Promise<YouTubeUploadResult> {
-  return request(`/api/projects/${encodeURIComponent(projectId)}/youtube/upload`, { method: "POST", body: JSON.stringify(payload) });
-}
-
-export function deleteProject(projectId: string): Promise<unknown> {
-  return request(`/api/projects/${encodeURIComponent(projectId)}`, { method: "DELETE" });
-}
-
-export function fetchReferenceState(projectId: string): Promise<ReferenceState> {
-  return request<ReferenceState>(`/api/projects/${encodeURIComponent(projectId)}/reference`);
-}
-
-export function searchReferences(
-  projectId: string,
-  payload: ReferenceSearchPayload
-): Promise<{ candidates: readonly ReferenceCandidate[] }> {
-  return request<{ candidates: readonly ReferenceCandidate[] }>(
-    `/api/projects/${encodeURIComponent(projectId)}/reference/search`,
-    {
-      method: "POST",
-      body: JSON.stringify(payload)
-    }
-  );
-}
-
+// ── reference step ──
+type Candidates = { candidates: readonly ReferenceCandidate[] };
+export const fetchReferenceState = (projectId: string) => get<ReferenceState>(p(projectId, "/reference"));
+export const searchReferences = (projectId: string, payload: ReferenceSearchPayload) => post<Candidates>(p(projectId, "/reference/search"), payload);
 /** Search without a project: nothing is created until a video is picked. */
-export function searchReferencesWithoutProject(payload: ReferenceSearchPayload): Promise<{ candidates: readonly ReferenceCandidate[] }> {
-  return request("/api/references/search", { method: "POST", body: JSON.stringify(payload) });
-}
+export const searchReferencesWithoutProject = (payload: ReferenceSearchPayload) => post<Candidates>("/api/references/search", payload);
+export const addDirectReference = (projectId: string, url: string) =>
+  post<Candidates & { candidate: ReferenceCandidate }>(p(projectId, "/reference/direct"), { url });
+export const selectReference = (projectId: string, videoId: string) =>
+  post<{ selected_reference: ReferenceCandidate }>(p(projectId, "/reference/select"), { video_id: videoId });
+export const extractReferenceAudio = (projectId: string) => post<{ audio_path: string }>(p(projectId, "/reference/audio/extract"));
+export const runReferenceStt = (projectId: string) => post<{ reference_script: string }>(p(projectId, "/reference/stt"));
+export const runReferenceAnalysis = (projectId: string) =>
+  post<Pick<ReferenceState, "analysis" | "analysis_markdown">>(p(projectId, "/reference/analyze"));
 
-export function addDirectReference(
-  projectId: string,
-  url: string
-): Promise<{ candidate: ReferenceCandidate; candidates: readonly ReferenceCandidate[] }> {
-  return request<{ candidate: ReferenceCandidate; candidates: readonly ReferenceCandidate[] }>(
-    `/api/projects/${encodeURIComponent(projectId)}/reference/direct`,
-    {
-      method: "POST",
-      body: JSON.stringify({ url })
-    }
-  );
-}
+// ── script step ──
+export const fetchScriptsState = (projectId: string) => get<ScriptsState>(p(projectId, "/scripts"));
+export const generateScriptCandidates = (projectId: string, feedback?: string) =>
+  post<{ candidates: readonly ScriptCandidate[] }>(p(projectId, "/scripts/candidates"), { feedback: feedback ?? "" });
+export const selectScriptCandidate = (projectId: string, candidateId: string) =>
+  post<{ selected_candidate: ScriptCandidate }>(p(projectId, "/scripts/select"), { candidate_id: candidateId });
+export const finalizeScript = (projectId: string, feedback: string) => post<FinalScriptState>(p(projectId, "/scripts/finalize"), { feedback });
+export const updateFinalScript = (projectId: string, finalScript: string) =>
+  put<ScriptsState>(p(projectId, "/scripts/final"), { final_script: finalScript });
+export const factCheckScript = (projectId: string) => post<ScriptsState>(p(projectId, "/scripts/factcheck"));
 
-export function selectReference(
-  projectId: string,
-  videoId: string
-): Promise<{ selected_reference: ReferenceCandidate }> {
-  return request<{ selected_reference: ReferenceCandidate }>(
-    `/api/projects/${encodeURIComponent(projectId)}/reference/select`,
-    {
-      method: "POST",
-      body: JSON.stringify({ video_id: videoId })
-    }
-  );
-}
-
-export function extractReferenceAudio(projectId: string): Promise<{ audio_path: string }> {
-  return request<{ audio_path: string }>(
-    `/api/projects/${encodeURIComponent(projectId)}/reference/audio/extract`,
-    { method: "POST" }
-  );
-}
-
-export function runReferenceStt(projectId: string): Promise<{ reference_script: string }> {
-  return request<{ reference_script: string }>(
-    `/api/projects/${encodeURIComponent(projectId)}/reference/stt`,
-    { method: "POST" }
-  );
-}
-
-export function runReferenceAnalysis(
-  projectId: string
-): Promise<Pick<ReferenceState, "analysis" | "analysis_markdown">> {
-  return request<Pick<ReferenceState, "analysis" | "analysis_markdown">>(
-    `/api/projects/${encodeURIComponent(projectId)}/reference/analyze`,
-    { method: "POST" }
-  );
-}
-
-export function fetchScriptsState(projectId: string): Promise<ScriptsState> {
-  return request<ScriptsState>(`/api/projects/${encodeURIComponent(projectId)}/scripts`);
-}
-
-export function generateScriptCandidates(
-  projectId: string,
-  feedback?: string
-): Promise<{ candidates: readonly ScriptCandidate[] }> {
-  return request<{ candidates: readonly ScriptCandidate[] }>(
-    `/api/projects/${encodeURIComponent(projectId)}/scripts/candidates`,
-    {
-      method: "POST",
-      body: JSON.stringify({ feedback: feedback ?? "" })
-    }
-  );
-}
-
-export function selectScriptCandidate(
-  projectId: string,
-  candidateId: string
-): Promise<{ selected_candidate: ScriptCandidate }> {
-  return request<{ selected_candidate: ScriptCandidate }>(
-    `/api/projects/${encodeURIComponent(projectId)}/scripts/select`,
-    {
-      method: "POST",
-      body: JSON.stringify({ candidate_id: candidateId })
-    }
-  );
-}
-
-export function finalizeScript(
-  projectId: string,
-  feedback: string
-): Promise<{
-  selected_candidate_id: string;
-  feedback: string;
-  final_script: string;
-  tts_validation: TtsValidationResult;
-}> {
-  return request<{
-    selected_candidate_id: string;
-    feedback: string;
-    final_script: string;
-    tts_validation: TtsValidationResult;
-  }>(`/api/projects/${encodeURIComponent(projectId)}/scripts/finalize`, {
-    method: "POST",
-    body: JSON.stringify({ feedback })
-  });
-}
-
-export function fetchProductionState(projectId: string): Promise<ProductionState> {
-  return request<ProductionState>(`/api/projects/${encodeURIComponent(projectId)}/production`);
-}
-
-export function generateTtsAudio(projectId: string): Promise<ProductionState> {
-  return request<ProductionState>(`/api/projects/${encodeURIComponent(projectId)}/production/tts`, {
-    method: "POST"
-  });
-}
-
-export function alignSubtitlesAndScenes(projectId: string): Promise<ProductionState> {
-  return request<ProductionState>(`/api/projects/${encodeURIComponent(projectId)}/production/align`, {
-    method: "POST"
-  });
-}
-
-export function generateConcepts(projectId: string, style?: string): Promise<ProductionState> {
-  const query = style ? `?style=${encodeURIComponent(style)}` : "";
-  return request<ProductionState>(`/api/projects/${encodeURIComponent(projectId)}/production/concepts${query}`, {
-    method: "POST"
-  });
-}
-
-export function generateSceneImage(
-  projectId: string,
-  sceneId: number,
-  model: string = "nano_banana_pro"
-): Promise<ProductionState> {
-  return request<ProductionState>(
-    `/api/projects/${encodeURIComponent(projectId)}/production/scenes/${sceneId}/image?model=${encodeURIComponent(model)}`,
-    { method: "POST" }
-  );
-}
-
-export function generateAllSceneImages(
-  projectId: string,
-  model: string = "nano_banana_pro"
-): Promise<ProductionState> {
-  return request<ProductionState>(
-    `/api/projects/${encodeURIComponent(projectId)}/production/scenes/images?model=${encodeURIComponent(model)}`,
-    { method: "POST" }
-  );
-}
-
-export function generateSceneVideo(
-  projectId: string,
-  sceneId: number,
-  model: string = "kling_o3_flf",
-  duration: number = 5,
-  multiShots: boolean = false,
-  matchPrevFrame: boolean = true
-): Promise<ProductionState> {
-  return request<ProductionState>(
-    `/api/projects/${encodeURIComponent(projectId)}/production/scenes/${sceneId}/video?model=${encodeURIComponent(model)}&duration=${duration}&multi_shots=${multiShots}&match_prev_frame=${matchPrevFrame}`,
-    { method: "POST" }
-  );
-}
-
-export function passContinuityToNext(
-  projectId: string,
-  sceneId: number
-): Promise<ProductionState> {
-  return request<ProductionState>(
-    `/api/projects/${encodeURIComponent(projectId)}/production/scenes/${sceneId}/pass-next`,
-    { method: "POST" }
-  );
-}
-
-export function renderShorts(projectId: string, title?: string): Promise<ProductionState> {
-  return request<ProductionState>(
-    `/api/projects/${encodeURIComponent(projectId)}/production/render`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(title !== undefined ? { title } : {})
-    }
-  );
-}
-
-export function regenerateSceneWithFeedback(
+// ── production ──
+export const fetchProductionState = (projectId: string) => get<ProductionState>(p(projectId, "/production"));
+export const generateTtsAudio = (projectId: string) => post<ProductionState>(p(projectId, "/production/tts"));
+export const generateConcepts = (projectId: string, style?: string) =>
+  post<ProductionState>(p(projectId, `/production/concepts${style ? `?${qs({ style })}` : ""}`));
+export const generateSceneImage = (projectId: string, sceneId: number, model = "cloudflare") =>
+  post<ProductionState>(p(projectId, `/production/scenes/${sceneId}/image?${qs({ model })}`));
+export const generateAllSceneImages = (projectId: string, model = "cloudflare") =>
+  post<ProductionState>(p(projectId, `/production/scenes/images?${qs({ model })}`));
+export const generateSceneVideo = (projectId: string, sceneId: number, model = "kenburns", duration = 5, multiShots = false, matchPrevFrame = true) =>
+  post<ProductionState>(p(projectId, `/production/scenes/${sceneId}/video?${qs({ model, duration, multi_shots: multiShots, match_prev_frame: matchPrevFrame })}`));
+export const regenerateSceneWithFeedback = (
   projectId: string,
   sceneId: number,
   feedback: string,
-  target: "image" | "video" | "both" | "prompt_only",
+  target: "image" | "video" | "both" | "prompt_image" | "prompt_video",
   model?: string,
-  duration: number = 5,
-  multiShots: boolean = false,
-  matchPrevFrame: boolean = true
-): Promise<ProductionState> {
-  return request<ProductionState>(
-    `/api/projects/${encodeURIComponent(projectId)}/production/scenes/${sceneId}/feedback-regenerate`,
-    {
-      method: "POST",
-      body: JSON.stringify({
-        feedback,
-        target,
-        model,
-        duration,
-        multi_shots: multiShots,
-        match_prev_frame: matchPrevFrame,
-      }),
-    }
-  );
-}
-
-export function updateScenePrompts(
-  projectId: string,
-  sceneId: number,
-  startImagePrompt?: string,
-  videoPrompt?: string
-): Promise<ProductionState> {
-  return request<ProductionState>(
-    `/api/projects/${encodeURIComponent(projectId)}/production/scenes/${sceneId}/prompts`,
-    {
-      method: "PUT",
-      body: JSON.stringify({
-        start_image_prompt: startImagePrompt,
-        video_prompt: videoPrompt,
-      }),
-    }
-  );
-}
-
-export function updateFinalScript(projectId: string, finalScript: string): Promise<ScriptsState> {
-  return request<ScriptsState>(`/api/projects/${encodeURIComponent(projectId)}/scripts/final`, {
-    method: "PUT",
-    body: JSON.stringify({ final_script: finalScript })
+  duration = 5,
+  multiShots = false,
+  matchPrevFrame = true
+) =>
+  post<ProductionState>(p(projectId, `/production/scenes/${sceneId}/feedback-regenerate`), {
+    feedback, target, model, duration, multi_shots: multiShots, match_prev_frame: matchPrevFrame
   });
-}
+export const updateScenePrompts = (projectId: string, sceneId: number, startImagePrompt?: string, videoPrompt?: string) =>
+  put<ProductionState>(p(projectId, `/production/scenes/${sceneId}/prompts`), { start_image_prompt: startImagePrompt, video_prompt: videoPrompt });
+export const renderShorts = (projectId: string, title?: string) =>
+  post<ProductionState>(p(projectId, "/production/render"), title !== undefined ? { title } : {});
 
-export function factCheckScript(projectId: string): Promise<ScriptsState> {
-  return request<ScriptsState>(`/api/projects/${encodeURIComponent(projectId)}/scripts/factcheck`, {
-    method: "POST"
-  });
-}
+// ── side views ──
+export const fetchUsage = () => get<UsageToday>("/api/usage");
+export const fetchTopics = () => get<TopicListing>("/api/topics");
+export const hideTopics = (ids: readonly string[]) => post<TopicListing>("/api/topics/hide", { ids });
+export const restoreTopics = (ids: readonly string[]) => post<TopicListing>("/api/topics/restore", { ids });
+export const startTopic = (topic: TopicItem) =>
+  post<{ project: Project; feedback: string }>(`/api/topics/${encodeURIComponent(topic.source_project_id)}/${topic.id.split(":")[1]}/start`);
+export const fetchDaily = () => get<DailyState>("/api/daily-references");
+export const saveDailyKeywords = (keywords: readonly string[]) => put<DailyState>("/api/daily-references/keywords", { keywords });
+export const refreshDaily = (force = false) => post<DailyState>(`/api/daily-references/refresh${force ? "?force=true" : ""}`);
 
-export interface UsageToday {
-  readonly llm: number;
-  readonly llm_limit: number | null;
-  readonly image: number;
-  readonly image_limit: number | null;
-  readonly tts: number;
-}
-
-export function fetchUsage(): Promise<UsageToday> {
-  return request<UsageToday>("/api/usage");
-}
-
-export interface TopicItem {
-  readonly id: string;
-  readonly source_project_id: string;
-  readonly reference_title: string;
-  readonly title: string;
-  readonly hook: string;
-  readonly category: string;
-  readonly analyzed_at: string;
-  readonly used_by: string | null;
-}
-
-export interface TopicListing {
-  readonly topics: readonly TopicItem[];
-  readonly hidden?: readonly TopicItem[];
-}
-
-export function restoreTopics(ids: readonly string[]): Promise<TopicListing> {
-  return request("/api/topics/restore", { method: "POST", body: JSON.stringify({ ids }) });
-}
-
-export function fetchTopics(): Promise<TopicListing> {
-  return request("/api/topics");
-}
-
-export function hideTopics(ids: readonly string[]): Promise<TopicListing> {
-  return request("/api/topics/hide", { method: "POST", body: JSON.stringify({ ids }) });
-}
-
-export function startTopic(topic: TopicItem): Promise<{ project: Project; feedback: string }> {
-  const index = topic.id.split(":")[1];
-  return request(`/api/topics/${encodeURIComponent(topic.source_project_id)}/${index}/start`, { method: "POST" });
-}
-
-export interface DailyItem extends ReferenceCandidate {
-  readonly keyword: string;
-  readonly views_per_day: number;
-  readonly used_by: string | null;
-}
-
-export interface DailyState {
-  readonly keywords: readonly string[];
-  readonly fetched_on: string | null;
-  readonly items: readonly DailyItem[];
-  readonly trends?: Readonly<Record<string, readonly TrendPoint[]>>;
-}
-
-export interface TrendPoint {
-  readonly date: string;
-  readonly count: number;
-  readonly breakouts: number;
-  readonly median_views_per_day: number;
-}
-
-export function fetchDaily(): Promise<DailyState> {
-  return request("/api/daily-references");
-}
-
-export function saveDailyKeywords(keywords: readonly string[]): Promise<DailyState> {
-  return request("/api/daily-references/keywords", { method: "PUT", body: JSON.stringify({ keywords }) });
-}
-
-export function refreshDaily(force = false): Promise<DailyState> {
-  return request(`/api/daily-references/refresh${force ? "?force=true" : ""}`, { method: "POST" });
-}
+// ── settings and YouTube ──
+export const fetchKeyStatus = () => get<KeyStatus>("/api/settings/keys");
+/** Keys go to the server's .env; the reply only says which are set. "" clears one. */
+export const saveKeys = (values: Readonly<Record<string, string>>) => put<KeyStatus>("/api/settings/keys", { values });
+export const fetchYouTubeStatus = () => get<YouTubeStatus>("/api/youtube/status");
+export const fetchYouTubeAuthUrl = () => get<{ auth_url: string }>("/api/youtube/connect");
+export const saveClientSecret = (content: string) => put<YouTubeStatus>("/api/youtube/client-secret", { content });
+export const disconnectYouTube = () => call<YouTubeStatus>("DELETE", "/api/youtube/connection");
+export const uploadToYouTube = (projectId: string, payload: { title: string; description: string; tags: string }) =>
+  post<YouTubeUploadResult>(p(projectId, "/youtube/upload"), payload);
