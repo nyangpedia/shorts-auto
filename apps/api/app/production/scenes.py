@@ -30,14 +30,23 @@ _SENTENCES = re.compile(r"(?<=[.?!])\s+|\n+")
 # Natural pause points inside a Korean sentence: a comma, or a connective ending (…는데, …지만, …하고 …).
 _SOFT_BREAK = re.compile(r"(,|는데|은데|지만|면서|으며|하며|거나|으나|했고|하고|되고|이고)$")
 _NUMBER_TAIL = re.compile(r"[\d만억조천백]$")
+# ponytail: last-syllable guess at "this word closes a phrase" (a particle or verb ending); nouns that happen
+# to end in one slip through. A morphological analyser would be exact if this misjudges too often.
+_PHRASE_END = re.compile(r"([은는이가을를에서로고면며도만지다요죠게과와듯럼터것,])$")
+# Dependent nouns can't open a beat ("채운 / 것"): they stay with the word they describe.
+_BOUND_NOUN = re.compile(r"^(것|수|때|데|줄|뿐|만큼|듯)")
 
 
 def _cut_sentence(sentence: str) -> list[str]:
     pieces, line = [], ""
     for word in sentence.split():
-        if line and len(f"{line} {word}") > BEAT_MAX and not _NUMBER_TAIL.search(line):
-            pieces.append(line)
-            line = word
+        if line and len(f"{line} {word}") > BEAT_MAX and not _NUMBER_TAIL.search(line) and not _BOUND_NOUN.match(word):
+            # Cut after the last word that closes a phrase, so "소음 / 에너지를" and "뚝 / 떨어뜨린다고" stay whole.
+            words = line.split()
+            back = next((i for i in range(len(words), 0, -1)
+                         if _PHRASE_END.search(words[i - 1]) and len(" ".join(words[:i])) >= BEAT_MIN), len(words))
+            pieces.append(" ".join(words[:back]))
+            line = " ".join([*words[back:], word])
         else:
             line = f"{line} {word}".strip()
         if len(line) >= BEAT_SOFT and _SOFT_BREAK.search(line):
@@ -48,7 +57,7 @@ def _cut_sentence(sentence: str) -> list[str]:
     # A stub stays inside its own sentence: "첫째로," leads into what follows, "보일까요?" closes what came before.
     if len(pieces) > 1 and len(pieces[0]) < BEAT_MIN:
         pieces[1] = f"{pieces.pop(0)} {pieces[0]}"
-    if len(pieces) > 1 and len(pieces[-1]) < BEAT_MIN:
+    if len(pieces) > 1 and len(pieces[-1]) <= BEAT_MIN:
         tail = pieces.pop()
         pieces[-1] = f"{pieces[-1]} {tail}"
     return pieces

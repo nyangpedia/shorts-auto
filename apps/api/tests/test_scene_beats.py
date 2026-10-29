@@ -55,3 +55,10 @@ def test_new_sentence_is_not_stranded_at_segment_end():
         [{"text": "주장이 기다립니다 빛의", "start": 0.0, "end": 2.0}, {"text": "속도는 일정합니다", "start": 2.0, "end": 3.0}],
     )
     assert [b["text"] for b in blocks] == ["주장이 기다립니다.", "빛의 속도는 일정합니다."]
+
+
+def test_cuts_land_between_phrases():
+    beats = script_beats("실제로 측정해 보면 일반 열차보다 소음 에너지를 약 절반 수준까지 뚝 떨어뜨린다고 하죠. "
+                         "올림픽 수영장 수십 개를 방음벽으로 채운 것 맞먹는 정숙성입니다.")
+    assert beats[:4] == ["실제로 측정해 보면 일반 열차보다", "소음 에너지를 약 절반 수준까지",
+                         "뚝 떨어뜨린다고 하죠.", "올림픽 수영장 수십 개를 방음벽으로 채운 것"]
