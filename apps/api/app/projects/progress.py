@@ -18,6 +18,10 @@ class JobRun:
         self.outputs, self.project_id, self.job_id = outputs, project_id, job_id
         self.finished = False
 
+    def note(self, message: str) -> None:
+        """Update the running job's message (e.g. a second phase started)."""
+        update_job_state(self.outputs, self.project_id, self.job_id, "running", message)
+
     def succeed(self, message: str, outputs: list[str] | None = None) -> None:
         update_job_state(self.outputs, self.project_id, self.job_id, "succeeded", message, output_paths=outputs)
         self.finished = True

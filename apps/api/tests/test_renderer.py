@@ -20,3 +20,19 @@ def test_opening_title_never_uses_the_untitled_placeholder(tmp_path: Path):
     assert opening_title(tmp_path, "  지구의 비밀 ") == "지구의 비밀"
     (tmp_path / "project.json").write_text(json.dumps({"project_title": "피라미드"}), encoding="utf-8")
     assert opening_title(tmp_path, "") == "피라미드"
+
+
+def test_scene_files_are_served_only_by_their_own_names(tmp_path: Path):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+
+    client = TestClient(create_app(repo_root=tmp_path))
+    pid = client.post("/api/projects", json={"project_title": "t"}).json()["project"]["project_id"]
+    scenes = tmp_path / "outputs" / pid / "scenes"
+    scenes.mkdir(parents=True)
+    (scenes / "scene_01_start.png").write_bytes(b"png")
+    (scenes / "notes.txt").write_bytes(b"x")
+
+    assert client.get(f"/api/projects/{pid}/production/scenes/scene_01_start.png").status_code == 200
+    assert client.get(f"/api/projects/{pid}/production/scenes/notes.txt").status_code == 404
+    assert client.get(f"/api/projects/{pid}/production/scenes/..%2Fproject.json").status_code == 404
