@@ -105,6 +105,8 @@ export const regenerateSceneWithFeedback = (
   });
 export const updateScenePrompts = (projectId: string, sceneId: number, startImagePrompt?: string, videoPrompt?: string) =>
   put<ProductionState>(p(projectId, `/production/scenes/${sceneId}/prompts`), { start_image_prompt: startImagePrompt, video_prompt: videoPrompt });
+export const makeThumbnail = (projectId: string, sceneId: number, title: string) =>
+  post<{ thumbnail_url: string }>(p(projectId, "/production/thumbnail"), { scene_id: sceneId, title });
 export const renderShorts = (projectId: string, title?: string) =>
   post<ProductionState>(p(projectId, "/production/render"), title !== undefined ? { title } : {});
 

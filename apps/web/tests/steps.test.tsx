@@ -165,7 +165,10 @@ describe("FinalStep", () => {
       isBusy: false,
       busyText: null,
       onTitleChange: vi.fn(),
-      onRender: vi.fn()
+      onRender: vi.fn(),
+      onOpenSettings: vi.fn(),
+      scenePictures: [],
+      thumbnailUrl: null
     };
     const { unmount } = render(<FinalStep {...props} />);
     await user.click(screen.getAllByRole("checkbox")[0]);

@@ -30,6 +30,7 @@ SCOPE = " ".join([
 ])
 REDIRECT_URI = "http://127.0.0.1:8000/api/youtube/callback"
 UPLOAD_URL = "https://www.googleapis.com/upload/youtube/v3/videos"
+THUMBNAIL_URL = "https://www.googleapis.com/upload/youtube/v3/thumbnails/set"
 
 
 class ClientSecretRequest(BaseModel):
@@ -157,9 +158,19 @@ def create_uploads_router(
             raise HTTPException(status_code=400, detail=f"업로드 실패: {done.text[:300]}")
 
         video_id = done.json()["id"]
+        thumbnail_note = None
+        thumbnail = outputs / project_id / "thumbnail.jpg"
+        if thumbnail.exists():
+            # Best effort: custom thumbnails need a phone-verified channel, and the video itself is already up.
+            with httpx.Client(transport=transport, timeout=120) as http:
+                sent = http.post(THUMBNAIL_URL, params={"videoId": video_id}, content=thumbnail.read_bytes(),
+                                 headers={**auth, "Content-Type": "image/jpeg"})
+            if sent.status_code != 200:
+                thumbnail_note = "영상은 올라갔지만 썸네일은 적용되지 않았습니다. 채널 전화번호 인증이 필요할 수 있어요. 스튜디오에서 직접 올려주세요."
         project = read_project(outputs, project_id)
         project.generated_files["youtube_video"] = video_id
         save_project(outputs, project)
-        return {"video_id": video_id, "url": f"https://youtu.be/{video_id}", "studio_url": f"https://studio.youtube.com/video/{video_id}/edit"}
+        return {"video_id": video_id, "url": f"https://youtu.be/{video_id}", "studio_url": f"https://studio.youtube.com/video/{video_id}/edit",
+                "thumbnail_note": thumbnail_note}
 
     return router

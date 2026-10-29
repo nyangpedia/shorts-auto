@@ -688,9 +688,12 @@ export default function App() {
                   candidate={scripts?.selected_candidate ?? null}
                   finalVideoUrl={production?.has_final_video ? production.final_video_url ?? `/api/projects/${encodeURIComponent(project.project_id)}/production/final-video` : null}
                   isBusy={busy !== null}
+                  onOpenSettings={() => setView("settings")}
                   onRender={handleRender}
                   onTitleChange={handleTitleChange}
                   projectId={project.project_id}
+                  scenePictures={scenes.flatMap((s) => (s.start_image_url ? [{ id: s.scene_id, url: s.start_image_url }] : []))}
+                  thumbnailUrl={production?.thumbnail_url ?? null}
                   scenesReady={scenes.length > 0 && scenes.every((s) => s.start_image_url)}
                   videoTitle={project.project_title === "untitled" ? "" : project.project_title}
                 />

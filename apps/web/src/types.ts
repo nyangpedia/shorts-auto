@@ -208,6 +208,7 @@ export interface ProductionState {
   readonly video_scenes?: readonly VideoSceneItem[];
   readonly has_final_video?: boolean;
   readonly final_video_url?: string | null;
+  readonly thumbnail_url?: string | null;
 }
 
 // ── side views and settings ──
@@ -264,6 +265,7 @@ export interface YouTubeUploadResult {
   readonly video_id: string;
   readonly url: string;
   readonly studio_url: string;
+  readonly thumbnail_note?: string | null; // set when YouTube refused the thumbnail
 }
 
 export type KeyStatus = { readonly keys: Readonly<Record<string, boolean>> };

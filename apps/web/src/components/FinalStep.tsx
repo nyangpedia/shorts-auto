@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { fetchYouTubeAuthUrl, fetchYouTubeStatus, uploadToYouTube, type YouTubeStatus, type YouTubeUploadResult } from "../api";
+import { fetchYouTubeAuthUrl, fetchYouTubeStatus, makeThumbnail, uploadToYouTube, type YouTubeStatus, type YouTubeUploadResult } from "../api";
 import type { ScriptCandidate } from "../types";
 
 interface FinalStepProps {
@@ -13,6 +13,9 @@ interface FinalStepProps {
   readonly busyText: string | null;
   readonly onTitleChange: (title: string) => void;
   readonly onRender: (title: string) => void;
+  readonly onOpenSettings: () => void;
+  readonly scenePictures: readonly { readonly id: number; readonly url: string }[];
+  readonly thumbnailUrl: string | null;
 }
 
 const CHECKS = [
@@ -31,7 +34,8 @@ function readChecks(projectId: string): boolean[] {
   }
 }
 
-export function FinalStep({ projectId, finalVideoUrl, candidate, videoTitle, scenesReady, isBusy, busyText, onTitleChange, onRender }: FinalStepProps) {
+export function FinalStep(props: FinalStepProps) {
+  const { projectId, finalVideoUrl, candidate, videoTitle, scenesReady, isBusy, busyText, onTitleChange, onRender, onOpenSettings, scenePictures } = props;
   const [checks, setChecks] = useState<boolean[]>(() => readChecks(projectId));
   const [title, setTitle] = useState(videoTitle);
   const [videoVersion, setVideoVersion] = useState(0);
@@ -41,6 +45,27 @@ export function FinalStep({ projectId, finalVideoUrl, candidate, videoTitle, sce
   const [uploading, setUploading] = useState(false);
   const [uploaded, setUploaded] = useState<YouTubeUploadResult | null>(null);
   const [ytError, setYtError] = useState<string | null>(null);
+  const [thumbScene, setThumbScene] = useState(1);
+  const [thumbTitle, setThumbTitle] = useState(videoTitle);
+  const [thumbUrl, setThumbUrl] = useState<string | null>(props.thumbnailUrl);
+  const [thumbBusy, setThumbBusy] = useState(false);
+  const [thumbError, setThumbError] = useState<string | null>(null);
+
+  useEffect(() => { setThumbUrl(props.thumbnailUrl ? `${props.thumbnailUrl}?v=${Date.now()}` : null); setThumbError(null); }, [projectId, props.thumbnailUrl]);
+  useEffect(() => setThumbTitle(videoTitle), [videoTitle]);
+
+  async function thumbnail() {
+    setThumbBusy(true);
+    setThumbError(null);
+    try {
+      const made = await makeThumbnail(projectId, thumbScene, thumbTitle || videoTitle);
+      setThumbUrl(`${made.thumbnail_url}?v=${Date.now()}`);
+    } catch (reason) {
+      setThumbError(reason instanceof Error ? reason.message : "썸네일을 만들지 못했습니다.");
+    } finally {
+      setThumbBusy(false);
+    }
+  }
 
   const loadYt = () => void Promise.resolve(fetchYouTubeStatus()).then((s) => setYt(s ?? null)).catch(() => setYt(null));
   useEffect(loadYt, []);
@@ -115,6 +140,30 @@ export function FinalStep({ projectId, finalVideoUrl, candidate, videoTitle, sce
           </div>
         </div>
 
+        {scenePictures.length > 0 && (
+          <div className="card">
+            <div className="section-head"><h2>썸네일</h2><p>채널 화면·검색에 보이는 표지. 업로드할 때 같이 올라갑니다</p></div>
+            {thumbError ? <div className="banner bad" role="alert">⚠️ {thumbError}</div> : null}
+            <div className="thumb-picks" role="radiogroup" aria-label="썸네일에 쓸 장면">
+              {scenePictures.map((pic) => (
+                <button aria-checked={thumbScene === pic.id} className="thumb-pick" key={pic.id} onClick={() => setThumbScene(pic.id)} role="radio" type="button">
+                  <img alt={`${pic.id}번 장면`} src={pic.url} />
+                </button>
+              ))}
+            </div>
+            <label className="field">썸네일 문구 (짧을수록 크게 들어갑니다)
+              <input className="input" maxLength={100} onChange={(e) => setThumbTitle(e.target.value)} value={thumbTitle} />
+            </label>
+            <div className="row">
+              <button className="btn" disabled={thumbBusy || !(thumbTitle || videoTitle)} onClick={() => void thumbnail()} type="button">
+                {thumbBusy ? "만드는 중…" : thumbUrl ? "다시 만들기" : "썸네일 만들기"}
+              </button>
+              {thumbUrl ? <a className="btn" download={`${projectId}_thumbnail.jpg`} href={thumbUrl}>⬇ 내려받기</a> : null}
+            </div>
+            {thumbUrl ? <img alt="썸네일 미리보기" className="thumb-preview" src={thumbUrl} /> : null}
+          </div>
+        )}
+
         <div className="card">
           <div className="section-head"><h2>업로드 전 확인</h2><p>{checks.filter(Boolean).length}/{CHECKS.length}</p></div>
           <ul className="check">
@@ -126,11 +175,16 @@ export function FinalStep({ projectId, finalVideoUrl, candidate, videoTitle, sce
           </ul>
         </div>
 
-        {finalVideoUrl && yt?.configured ? (
+        {finalVideoUrl ? (
           <div className="card">
             <div className="section-head"><h2>유튜브에 올리기</h2><p>항상 비공개로 올라갑니다. 스튜디오에서 확인 후 공개하세요.</p></div>
             {ytError ? <div className="banner bad" role="alert">⚠️ {ytError}</div> : null}
-            {!yt.connected ? (
+            {!yt?.configured ? (
+              <div className="row">
+                <span>유튜브 계정이 아직 연결되지 않았습니다.</span>
+                <button className="btn" onClick={onOpenSettings} type="button">설정에서 연결하기</button>
+              </div>
+            ) : !yt.connected ? (
               <div className="row">
                 <button className="btn" onClick={() => void connectYt()} type="button">구글 계정 연결</button>
                 <button className="btn" onClick={loadYt} type="button">연결 확인</button>
@@ -138,6 +192,7 @@ export function FinalStep({ projectId, finalVideoUrl, candidate, videoTitle, sce
             ) : uploaded ? (
               <div className="row">
                 <span className="chip ok">업로드 완료 (비공개)</span>
+                {uploaded.thumbnail_note ? <span className="hint">{uploaded.thumbnail_note}</span> : null}
                 <a className="btn" href={uploaded.studio_url} rel="noreferrer" target="_blank">스튜디오에서 열기 ↗</a>
               </div>
             ) : (

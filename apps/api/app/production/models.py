@@ -80,6 +80,7 @@ class ProductionState(_Lenient):
     video_scenes: list[VideoSceneItem] = Field(default_factory=list)
     has_final_video: bool = False
     final_video_url: str | None = None
+    thumbnail_url: str | None = None
 
 
 # ── request bodies ──
@@ -100,3 +101,8 @@ class UpdateScenePromptsRequest(_Lenient):
 
 class RenderShortsRequest(_Lenient):
     title: str | None = None
+
+
+class ThumbnailRequest(_Lenient):
+    scene_id: int = Field(default=1, ge=1)
+    title: str = Field(max_length=100)

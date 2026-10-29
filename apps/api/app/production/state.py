@@ -62,4 +62,5 @@ def get_production_state(project_dir: Path, project_id: str | None = None) -> Pr
         video_scenes=scenes,
         has_final_video=rendered,
         final_video_url=f"/api/projects/{pid}/production/final-video" if rendered else None,
+        thumbnail_url=f"/api/projects/{pid}/production/thumbnail" if (project_dir / "thumbnail.jpg").exists() else None,
     )

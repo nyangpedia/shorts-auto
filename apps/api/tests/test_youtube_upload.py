@@ -22,6 +22,9 @@ def test_upload_goes_up_private_and_records_video_id(tmp_path: Path):
     def handler(request: httpx.Request) -> httpx.Response:
         if request.url.host == "oauth":
             return httpx.Response(200, json={"access_token": "at"})
+        if "thumbnails" in request.url.path:
+            seen["thumbnail"] = request.url.params["videoId"]
+            return httpx.Response(403, json={"error": "not verified"})
         if request.method == "POST":
             seen["meta"] = json.loads(request.content)
             return httpx.Response(200, headers={"location": "https://upload.example/session"})
@@ -41,3 +44,9 @@ def test_upload_goes_up_private_and_records_video_id(tmp_path: Path):
     assert seen["meta"]["snippet"]["tags"] == ["a", "b"] and seen["meta"]["snippet"]["description"].endswith("#Shorts")
     saved = client.get(f"/api/projects/{project_id}").json()["project"]
     assert saved["generated_files"]["youtube_video"] == "vid123"
+
+    # a thumbnail rides along; if YouTube refuses it the video upload still counts
+    (tmp_path / "outputs" / project_id / "thumbnail.jpg").write_bytes(b"jpg")
+    again = client.post(f"/api/projects/{project_id}/youtube/upload", json={"title": "제목"})
+    assert again.status_code == 200 and seen["thumbnail"] == "vid123"
+    assert "썸네일" in again.json()["thumbnail_note"]

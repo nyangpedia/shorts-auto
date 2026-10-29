@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import FileResponse
 
 from app.core.settings import AppSettings
-from app.production.models import FeedbackRegenerateRequest, ProductionState, RenderShortsRequest, UpdateScenePromptsRequest
+from app.production.models import FeedbackRegenerateRequest, ProductionState, RenderShortsRequest, ThumbnailRequest, UpdateScenePromptsRequest
 from app.production.renderer import FINAL_VIDEO, render_final_shorts
+from app.production.thumbnail import THUMBNAIL, make_thumbnail
 from app.production.service import (
     CONCEPT_KIT_FILENAME,
     RAW_STT_FILENAME,
@@ -169,5 +170,22 @@ def create_production_router(outputs_dir_provider: Callable[[], Path], settings_
         if not video.exists():
             raise HTTPException(status_code=404, detail="final.mp4 영상이 아직 생성되지 않았습니다.")
         return FileResponse(path=str(video), media_type="video/mp4", filename=f"{project_id}_final.mp4")
+
+    @router.post("/thumbnail")
+    def create_thumbnail(project_id: str, req: ThumbnailRequest, outputs: Path = Outputs):
+        path = folder(outputs, project_id)
+        try:
+            make_thumbnail(path, req.scene_id, req.title)
+        except (FileNotFoundError, ValueError) as exc:
+            raise _bad_request(exc) from exc
+        update_progress(outputs, project_id, files={"thumbnail": THUMBNAIL})
+        return {"thumbnail_url": f"/api/projects/{project_id}/production/thumbnail"}
+
+    @router.get("/thumbnail")
+    def get_thumbnail(project_id: str, outputs: Path = Outputs):
+        image = folder(outputs, project_id) / THUMBNAIL
+        if not image.exists():
+            raise HTTPException(status_code=404, detail="썸네일이 아직 없습니다.")
+        return FileResponse(path=str(image), media_type="image/jpeg", filename=f"{project_id}_thumbnail.jpg")
 
     return router

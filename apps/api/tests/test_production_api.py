@@ -48,3 +48,20 @@ def test_only_scene_files_are_served(tmp_path: Path):
     (tmp_path / "outputs" / pid / "scenes").mkdir()
     (tmp_path / "outputs" / pid / "scenes" / "notes.txt").write_text("x", encoding="utf-8")
     assert client.get(f"/api/projects/{pid}/production/scenes/notes.txt").status_code in (400, 404)
+
+
+def test_thumbnail_from_a_scene_picture(tmp_path: Path):
+    from PIL import Image
+
+    client = TestClient(create_app(repo_root=tmp_path))
+    pid = create_project(tmp_path / "outputs", project_title="t", now="261016_1200").project_id
+    base = f"/api/projects/{pid}/production"
+    assert client.post(f"{base}/thumbnail", json={"scene_id": 1, "title": "제목"}).status_code == 400  # no picture yet
+
+    (tmp_path / "outputs" / pid / "scenes").mkdir(exist_ok=True)  # scene_asset may have made it
+    Image.new("RGB", (768, 1344), (40, 80, 120)).save(tmp_path / "outputs" / pid / "scenes" / "scene_01_start.png")
+    made = client.post(f"{base}/thumbnail", json={"scene_id": 1, "title": "아주 긴 제목이 들어가도 세 줄 안에 맞춰집니다 정말로"})
+    assert made.json()["thumbnail_url"] == f"{base}/thumbnail"
+    assert client.get(base).json()["thumbnail_url"] == f"{base}/thumbnail"
+    image = Image.open(tmp_path / "outputs" / pid / "thumbnail.jpg")
+    assert image.size == (1080, 1920)
