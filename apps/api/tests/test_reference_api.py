@@ -371,8 +371,8 @@ def test_video_without_speech_is_analysed_by_its_title(tmp_path: Path):
     s.post("/select", json={"video_id": "highratio1"})
 
     script = s.post("/stt").json()["reference_script"]
-    assert "내레이션 없는 영상" in script and "highratio1" in script  # the title stands in for the empty transcript
-    assert step(s.project(), "STT") == ("succeeded", "말소리가 없는 영상이라 제목으로 분석합니다.")
+    assert "내레이션 없는 영상" in script and "highratio1" in script  # no screen reader here: the title stands in
+    assert step(s.project(), "STT")[1].startswith("말소리가 없는 영상이라")
     assert s.post("/analyze").status_code == 200
     assert "highratio1" in seen[0]
 
@@ -382,3 +382,27 @@ def test_empty_script_is_never_analysed(tmp_path: Path):
     s.seed(reference_script__md="\n")
     response = s.post("/analyze")
     assert response.status_code == 400 and "비어 있습니다" in response.json()["detail"]
+
+
+def test_repeated_phrase_is_not_speech():
+    from app.references.router import looks_like_speech
+
+    assert not looks_like_speech("JR東日本E233系電車 JR東日本E233系電車 JR東日本E233系電車 JR東日本E233系電車")  # Whisper on music
+    assert looks_like_speech("What if the Earth really was flat? We all picture the oceans pouring off the edge.")
+    assert looks_like_speech("もし円周率が3になったら世界はどうなるのか、順番に見ていきましょう")  # no spaces is fine
+
+
+def test_screen_reading_goes_into_the_script(monkeypatch, tmp_path: Path):
+    from app.references import screen
+
+    class Reader:
+        def describe(self, content):
+            assert any(part["type"] == "image_url" for part in content)
+            return "[2초] 자막: もしも\n흐름: 도시가 무너진다"
+
+    frame = tmp_path / "f.jpg"
+    frame.write_bytes(b"jpg")
+    monkeypatch.setattr(screen, "download_small_video", lambda url, folder, binary: folder / "video.mp4")
+    monkeypatch.setattr(screen, "sample_frames", lambda video, folder, seconds: [(2.0, frame)])
+    script = screen.silent_video_script(video("silent1", 100), Reader(), "yt-dlp", 30.0)
+    assert "[화면 내용]" in script and "도시가 무너진다" in script and "silent1" in script

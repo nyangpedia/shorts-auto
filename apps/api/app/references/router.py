@@ -37,6 +37,7 @@ from app.references.files import (
     write_selected_reference,
 )
 from app.references.models import DirectReferenceRequest, ReferenceCandidate, ReferenceSearchRequest, SelectReferenceRequest
+from app.references.screen import silent_video_script
 from app.references.openai_clients import (
     AnalysisClient,
     OpenAIAnalysisClient,
@@ -89,15 +90,13 @@ def _error_text(exc: Exception) -> str:
 MIN_SPEECH_CHARS = 15  # less than this is noise, not narration
 
 
-def silent_video_script(reference) -> str:
-    """Stand-in script for a video without speech: its title, flagged so the analysis doesn't invent lines."""
-    if reference is None:
-        raise ValueError("말소리를 찾지 못했습니다. 내레이션이 있는 영상을 고르세요.")
-    gloss = f" ({reference.title_ko})" if reference.title_ko else ""
-    return (
-        "[내레이션 없는 영상: 음악과 화면 자막만 있음. 대본 인용을 지어내지 말고, 제목이 던지는 질문과 소재로만 분석할 것]\n"
-        f"제목: {reference.title}{gloss}"
-    )
+def looks_like_speech(text: str) -> bool:
+    """False for an empty transcript and for Whisper's music hallucinations, which repeat one phrase
+    ("JR東日本E233系電車 JR東日本E233系電車 …")."""
+    words = text.split()
+    if len(text.strip()) < MIN_SPEECH_CHARS or not words:
+        return False
+    return len(set(words)) / len(words) >= 0.4 or len(set(words)) > 12
 
 
 def create_references_router(
@@ -265,11 +264,17 @@ def create_references_router(
                 raw = transcription_client_factory(settings.openai_api_key, settings.openai_transcription_model).transcribe(audio)
                 script = write_reference_stt_outputs(path, raw)
                 stt_note = "Reference STT complete."
-                if len(script) < MIN_SPEECH_CHARS:
+                if not looks_like_speech(script):
                     # music-only videos (common for "what if" simulations): analyse the title instead of an empty script
-                    script = silent_video_script(read_selected_reference(path))
+                    run.note("No speech found: reading the captions and scenes on screen")
+                    try:
+                        reader = analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model)
+                    except ValueError:  # no LLM key: the title-only fallback still works
+                        reader = None
+                    script = silent_video_script(read_selected_reference(path), reader, settings.yt_dlp_binary,
+                                                 float(raw.get("duration") or 60))
                     write_reference_script(path, script + "\n")
-                    stt_note = "말소리가 없는 영상이라 제목으로 분석합니다."
+                    stt_note = "말소리가 없는 영상이라 화면 자막과 장면을 읽어 분석합니다."
                 clear_reference_analysis_outputs(path)
                 update_progress(
                     outputs, project_id, current="Analysis",

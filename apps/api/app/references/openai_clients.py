@@ -139,3 +139,8 @@ class OpenAIAnalysisClient:
         if text.startswith("```"):
             text = text.split("\n", 1)[1].rsplit("```", 1)[0]
         return json.loads(text)
+
+    def describe(self, content: list[dict]) -> str:
+        """Free-text reply to a message with text and image parts (Gemini reads images on the free tier)."""
+        reply = self.client.chat.completions.create(model=self.model, messages=[{"role": "user", "content": content}])
+        return reply.choices[0].message.content or ""
