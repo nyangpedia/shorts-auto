@@ -198,4 +198,18 @@ describe("FinalStep", () => {
     expect(screen.getAllByRole("checkbox")[0]).toBeChecked();
     expect(screen.getByText("1/4")).toBeInTheDocument();
   });
+
+  it("shows a making-progress panel instead of the empty hint while rendering", () => {
+    const props = {
+      projectId: "p1", finalVideoUrl: null, candidate: null, videoTitle: "", scenesReady: true,
+      onTitleChange: vi.fn(), onRender: vi.fn(), scenePictures: [], thumbnailUrl: null
+    };
+    const { rerender } = render(<FinalStep {...props} isBusy={false} busyText={null} />);
+    expect(screen.getByText(/아직 렌더링하지 않았습니다/)).toBeInTheDocument();
+
+    rerender(<FinalStep {...props} isBusy busyText="렌더링 중… 5분 정도 걸립니다. 창을 닫지 마세요." />);
+    expect(screen.getByText("영상을 만드는 중이에요")).toBeInTheDocument();
+    expect(screen.queryByText(/아직 렌더링하지 않았습니다/)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "렌더링 중…" })).toBeDisabled();
+  });
 });

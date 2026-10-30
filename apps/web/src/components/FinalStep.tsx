@@ -54,6 +54,16 @@ export function FinalStep(props: FinalStepProps) {
   const [thumbUrl, setThumbUrl] = useState<string | null>(props.thumbnailUrl);
   const [thumbBusy, setThumbBusy] = useState(false);
   const [thumbError, setThumbError] = useState<string | null>(null);
+  const rendering = isBusy && Boolean(busyText?.startsWith("렌더링"));
+  const [elapsed, setElapsed] = useState(0);
+
+  useEffect(() => {
+    if (!rendering) return;
+    const started = Date.now();
+    setElapsed(0);
+    const tick = setInterval(() => setElapsed(Math.floor((Date.now() - started) / 1000)), 1000);
+    return () => clearInterval(tick);
+  }, [rendering]);
 
   useEffect(() => { setThumbUrl(props.thumbnailUrl ? `${props.thumbnailUrl}?v=${Date.now()}` : null); setThumbError(null); }, [projectId, props.thumbnailUrl]);
   useEffect(() => setThumbTitle(videoTitle), [videoTitle]);
@@ -116,18 +126,25 @@ export function FinalStep(props: FinalStepProps) {
   return (
     <div className="final">
       <div>
-        {finalVideoUrl ? (
+        {rendering ? (
+          <div className="video-empty video-making" role="status">
+            <span aria-hidden="true" className="spinner" />
+            <b>영상을 만드는 중이에요</b>
+            <span>자막·BGM·모션을 입히고 있어요</span>
+            <span className="elapsed">{Math.floor(elapsed / 60)}:{String(elapsed % 60).padStart(2, "0")} 경과 · 보통 5분 안팎</span>
+          </div>
+        ) : finalVideoUrl ? (
           <video controls src={`${finalVideoUrl}?v=${videoVersion}`} />
         ) : (
           <div className="video-empty">아직 렌더링하지 않았습니다.<br />오른쪽에서 렌더링하세요.</div>
         )}
-        {finalVideoUrl ? (
+        {finalVideoUrl && !rendering ? (
           <div className="row"><a className="btn" download={`${projectId}.mp4`} href={finalVideoUrl}>⬇ 영상 내려받기</a></div>
         ) : null}
       </div>
 
       <div className="stack">
-        {busyText ? <div className="banner busy">⏳ {busyText}</div> : null}
+        {busyText ? <div className="banner busy"><span aria-hidden="true" className="spinner small" /> {busyText}</div> : null}
         <div className="card">
           <div className="section-head"><h2>렌더링</h2><p>자막·BGM·모션그래픽을 입혀 9:16 영상으로 만듭니다 (약 5분)</p></div>
           <label className="field">첫 2초 화면 제목 (비우면 표시 안 함)
@@ -135,7 +152,7 @@ export function FinalStep(props: FinalStepProps) {
           </label>
           <div className="row">
             <button className="btn accent" disabled={isBusy || !scenesReady} onClick={() => onRender(title)} title={!scenesReady ? "모든 씬에 이미지가 있어야 합니다" : undefined} type="button">
-              {finalVideoUrl ? "다시 렌더링" : "렌더링 시작"}
+              {rendering ? "렌더링 중…" : finalVideoUrl ? "다시 렌더링" : "렌더링 시작"}
             </button>
           </div>
         </div>
