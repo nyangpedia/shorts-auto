@@ -41,6 +41,9 @@ class AppSettings(BaseModel):
     gemini_image_model: str = "gemini-2.5-flash-image"
     bgm_path: str = "assets/bgm/channel_bgm.mp3"
     bgm_volume: float = 0.18
+    # member login (same values the web app reads; empty = no member check)
+    vite_supabase_url: str = ""
+    vite_supabase_publishable_key: str = ""
     # tools and storage
     yt_dlp_binary: str = "yt-dlp"
     output_dir: str = "outputs"

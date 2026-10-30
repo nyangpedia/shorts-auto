@@ -18,12 +18,16 @@ import type {
   YouTubeUploadResult
 } from "./types";
 
+import { supabase } from "./supabase";
+
 export type { DailyItem, DailyState, TopicItem, TopicListing, TrendPoint, UsageToday, YouTubeStatus, YouTubeUploadResult } from "./types";
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
+  // The API checks membership on every change; the login token proves who is asking.
+  const token = (await supabase?.auth.getSession())?.data.session?.access_token;
   const response = await fetch(path, {
     method,
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
   if (!response.ok) {

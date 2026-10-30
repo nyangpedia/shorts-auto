@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.core import usage
 from app.core.keys_router import create_keys_router
+from app.core.members import create_member_guard, lookup_member
 from app.core.paths import find_repo_root
 from app.core.settings import load_settings
 from app.daily.router import create_daily_router
@@ -37,6 +38,7 @@ def create_app(
     transcription_client_factory=None,
     analysis_client_factory=OpenAIAnalysisClient,
     upload_transport=None,
+    member_lookup=lookup_member,
 ) -> FastAPI:
     root = repo_root or find_repo_root()
     settings = load_settings(root)  # one object, updated in place when keys are saved
@@ -60,7 +62,7 @@ def create_app(
     def settings_provider():
         return settings
 
-    app = FastAPI(title="Shorts Gongbang API")
+    app = FastAPI(title="Shorts Gongbang API", dependencies=[Depends(create_member_guard(settings_provider, member_lookup))])
     app.add_middleware(CORSMiddleware, allow_origins=WEB_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
     @app.get("/api/health")

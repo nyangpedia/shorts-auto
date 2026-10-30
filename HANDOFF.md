@@ -73,11 +73,14 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
   service_role 키는 앱에 절대 넣지 않음(anon 키 + URL만). 설치 파일은 Supabase 저장소 말고 GitHub Releases (무료 egress 5GB/월)
   — 단, **영상 20~30편 올려 반응 보기 전엔 착수 보류** 권장
 
-## 2026-10-29 회원 로그인 (1단계: 화면만)
-- 글모아와 **같은 Supabase 프로젝트·같은 계정**으로 로그인 (`apps/web/src/components/LoginGate.tsx`, `src/supabase.ts`).
-  `.env`의 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`(공개 값, 글모아 `.env.local`의 NEXT_PUBLIC_* 와 같은 값)가 비어 있으면 로그인 없이 열림. `vite.config.ts`의 `envDir`이 저장소 최상위 `.env`를 읽음
-- **아직 없음**: 회원가입(글모아 DB 트리거가 약관 동의 메타데이터 없으면 가입 거부 → 쇼츠공방 약관을 먼저 정해야 함), 서버 쪽 토큰 검증(지금은 화면에서만 막음), 하루 한도, 구글 로그인, 비밀번호 재설정
-- 다음 설계: 계정은 하나, 이용권은 앱별 표(예: `shorts_members`: 기간·요금제·하루 영상 한도)로 분리. 글모아 `members` 표는 건드리지 않음. DB 변경 SQL은 Supabase SQL Editor에 사용자가 직접 붙여 넣어야 함(글모아 때 자동 적용이 막혔음). 글모아 참고 코드: `G:\블로그자동화\블로그자동화` 의 `lib/member.ts`, `supabase/migrations/0001·0006`, `components/MemberGate.tsx`
+## 2026-10-30 회원 로그인 (화면 + 서버 검사)
+- 글모아와 **같은 Supabase 프로젝트·같은 계정**으로 로그인 (구글·이메일, `apps/web/src/components/LoginGate.tsx`, `src/supabase.ts`).
+  `.env`의 `VITE_SUPABASE_URL`, `VITE_SUPABASE_PUBLISHABLE_KEY`(공개 값, 글모아 `.env.local`의 NEXT_PUBLIC_* 와 같은 값)가 비어 있으면 로그인·서버 검사 모두 꺼짐. 구글 로그인은 Supabase **Authentication → URL Configuration → Redirect URLs**에 `http://127.0.0.1:5173` 추가 필요
+- **서버 검사**(`apps/api/app/core/members.py`): GET 외 모든 요청(생성·저장·업로드)에 `Authorization: Bearer <로그인 토큰>` 필요. Supabase `/auth/v1/user`로 본인 확인 → `shorts_members` 본인 행 읽기(RLS) → 행이 있고 `until`이 없거나 미래면 통과. 없으면 401, 비회원·만료는 403. 60초 캐시. GET(이미지·오디오 태그)은 토큰을 못 실어 열어 둠. 테스트 `tests/test_members.py`
+- **Supabase `shorts_members` 표** 만들어 둠(2026-10-30, 글모아 프로젝트 안): `user_id, plan, until, daily_limit`, RLS 본인 행 읽기만. 회원 추가·연장은 Supabase SQL Editor에서 `insert ... on conflict do update`로 직접(앱에서는 못 바꿈). 표에 행이 없으면 비회원
+- **아직 없음**: 하루 영상 한도 적용(`daily_limit`은 저장만 됨), 회원가입(글모아 DB 트리거가 약관 동의 메타데이터 없으면 가입 거부 → 쇼츠공방 약관 먼저), 가입 시 무료 행 자동 생성, 비밀번호 재설정, 대본 생성을 서버 경유로 옮기기(지금은 사용자 PC에서 코드를 고치면 우회 가능)
+- 방향: 앱은 사용자 PC에서 돌리고 회원 검사만 서버에서 하는 하이브리드. 글모아 참고 코드: `G:\블로그자동화\블로그자동화` 의 `lib/member.ts`, `supabase/migrations/0001·0006`, `components/MemberGate.tsx`
+- 채널명 후보 확정: **과학한입 / Science Bite** (유튜브 핸들 중복은 직접 확인 필요)
 
 ## 2026-10-30 작업·결정
 - **통근열차·우주정거장 눈물**: 이 PC(회사)에서 이미지·렌더·썸네일까지 끝남(`final.mp4`, `thumbnail.jpg`). **아직 유튜브에 안 올림.** `261029_1712`(핸드폰 로딩)는 대본까지만 됨(화풍·씬 구성 전)
