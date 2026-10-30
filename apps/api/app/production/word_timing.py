@@ -18,6 +18,19 @@ LINE_WIDTH_PX = 820
 PAUSE_SPLIT = 0.35  # a breath longer than this starts a new chunk
 LINE_END = tuple(".?!,~…")
 NUMBER_END = re.compile(r"[\d만억조천백]$")  # "230만" + "개의": never split a number from its unit
+# Words that lean on the next word ("한 | 장면", "거대한 | 피라미드", "지구의 | 중력"): never end a subtitle on one.
+_LEANS_ON_NEXT = {"이", "그", "저", "한", "두", "세", "네", "각", "전", "총", "약", "또", "더", "및", "모든", "어떤", "다른", "같은",
+                  "이런", "그런", "저런", "무슨", "어느", "가장", "너무", "정말", "진짜", "매우", "아주", "바로", "거의", "이미"}
+# Words that lean on the previous word and so can't open one ("채운 | 것", "알 | 수").
+_BOUND_START = re.compile(r"^(것|수|때|데|줄|뿐|만큼)")
+
+
+def leans_on_next(word: str) -> bool:
+    if word in _LEANS_ON_NEXT or word.endswith("의"):
+        return True
+    last = word[-1]
+    # Attributive endings (거대한, 놀라운, 할): a ㄴ or ㄹ final. 은/는/을/만/엔 are left out: they mostly mark a topic or object.
+    return "가" <= last <= "힣" and last not in "은는을만엔" and (ord(last) - 0xAC00) % 28 in (4, 8) and len(word) > 1
 
 
 def line_width_em(text: str) -> float:
@@ -100,6 +113,15 @@ def one_line_chunks(words: list[dict]) -> list[dict]:
                 groups.append([cur.pop(), w])  # no room: break before the number instead of after it
             else:
                 groups.append([w])
+        elif cur is not None and not fits and not cur[-1]["text"].endswith(LINE_END) and w["start"] - cur[-1]["end"] <= PAUSE_SPLIT:
+            # Forced break at a full line: carry words that lean on the next one over to the new subtitle.
+            tail: list[dict] = []
+            while len(cur) > 1 and len(tail) < 2 and (leans_on_next(cur[-1]["text"]) or (not tail and _BOUND_START.match(w["text"]))):
+                tail.insert(0, cur.pop())
+            if tail and not fits_one_line(" ".join(x["text"] for x in tail + [w])):
+                cur.extend(tail)  # no room to carry them: keep the plain break
+                tail = []
+            groups.append(tail + [w])
         elif (
             cur is None
             or not fits
@@ -134,4 +156,9 @@ if __name__ == "__main__":
     nums = one_line_chunks([{"text": t, "start": k, "end": k + 0.9} for k, t in enumerate(text.split())])
     assert " ".join(c["text"] for c in nums) == text and all(fits_one_line(c["text"]) for c in nums)
     assert not any(NUMBER_END.search(c["text"]) for c in nums[:-1])  # no line ends on a bare number
-    print("ok", [c["text"] for c in lines])
+    lean = "여기서 한 장면이 바뀌면서 거대한 피라미드가 지구의 중력을 이겨낸 것입니다"
+    cut = one_line_chunks([{"text": t, "start": k * 0.3, "end": k * 0.3 + 0.25} for k, t in enumerate(lean.split())])
+    assert " ".join(c["text"] for c in cut) == lean
+    assert not any(leans_on_next(c["text"].split()[-1]) for c in cut[:-1]), [c["text"] for c in cut]
+    assert not any(_BOUND_START.match(c["text"]) for c in cut), [c["text"] for c in cut]
+    print("ok", [c["text"] for c in lines], [c["text"] for c in cut])
