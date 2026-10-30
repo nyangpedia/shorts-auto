@@ -153,7 +153,7 @@ def higgsfield_run(model: str, prompt: str, *, extra: list[str] | None = None, t
     """Run `higgsfield generate create` and return the result URL."""
     model = HIGGSFIELD_ALIASES.get(model, model)
     cmd = ["higgsfield", "generate", "create", model, "--prompt", prompt, "--aspect-ratio", "9:16", "--wait", "--json", *(extra or [])]
-    done = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout_min * 60)
+    done = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout_min * 60)
     if done.returncode != 0:
         raise RuntimeError(f"Higgsfield 실행 실패 ({done.returncode}): {(done.stderr or done.stdout)[:400]}")
     try:

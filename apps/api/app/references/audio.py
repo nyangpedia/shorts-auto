@@ -25,7 +25,7 @@ def validate_audio_upload_name(filename: str) -> str:
 
 
 def default_runner(command: list[str]) -> tuple[int, str, str]:
-    done = subprocess.run(command, capture_output=True, text=True, check=False)
+    done = subprocess.run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", check=False)
     return done.returncode, done.stdout, done.stderr
 
 

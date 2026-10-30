@@ -6,7 +6,7 @@ from pathlib import Path
 
 
 def run_ffmpeg(*args: str) -> None:
-    done = subprocess.run(["ffmpeg", "-y", *args], capture_output=True, text=True)
+    done = subprocess.run(["ffmpeg", "-y", *args], capture_output=True, text=True, encoding="utf-8", errors="replace")
     if done.returncode != 0:
         raise RuntimeError(f"ffmpeg 실패: {done.stderr[-400:]}")
 
@@ -16,7 +16,7 @@ def media_duration(path: Path) -> float:
     done = subprocess.run(
         ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(path)],
         capture_output=True,
-        text=True,
+        text=True, encoding="utf-8", errors="replace",
     )
     try:
         return float(done.stdout.strip())
