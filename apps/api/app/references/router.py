@@ -90,11 +90,18 @@ def _error_text(exc: Exception) -> str:
 MIN_SPEECH_CHARS = 15  # less than this is noise, not narration
 
 
-def looks_like_speech(text: str) -> bool:
+MIN_SPEECH_COVERAGE = 0.25  # narration fills most of a Short; a few short lines in a long clip are music misheard
+
+
+def looks_like_speech(text: str, raw: dict | None = None) -> bool:
     """False for an empty transcript and for Whisper's music hallucinations, which repeat one phrase
-    ("JR東日本E233系電車 JR東日本E233系電車 …")."""
+    ("JR東日本E233系電車 JR東日本E233系電車 …") or sprinkle a few short lines over a long clip."""
     words = text.split()
     if len(text.strip()) < MIN_SPEECH_CHARS or not words:
+        return False
+    segments = (raw or {}).get("segments") or []
+    duration = float((raw or {}).get("duration") or 0)
+    if segments and duration and sum(max(0.0, s["end"] - s["start"]) for s in segments) / duration < MIN_SPEECH_COVERAGE:
         return False
     return len(set(words)) / len(words) >= 0.4 or len(set(words)) > 12
 
@@ -264,7 +271,7 @@ def create_references_router(
                 raw = transcription_client_factory(settings.openai_api_key, settings.openai_transcription_model).transcribe(audio)
                 script = write_reference_stt_outputs(path, raw)
                 stt_note = "Reference STT complete."
-                if not looks_like_speech(script):
+                if not looks_like_speech(script, raw):
                     # music-only videos (common for "what if" simulations): analyse the title instead of an empty script
                     run.note("No speech found: reading the captions and scenes on screen")
                     try:

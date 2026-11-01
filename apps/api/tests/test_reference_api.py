@@ -406,3 +406,13 @@ def test_screen_reading_goes_into_the_script(monkeypatch, tmp_path: Path):
     monkeypatch.setattr(screen, "sample_frames", lambda video, folder, seconds: [(2.0, frame)])
     script = screen.silent_video_script(video("silent1", 100), Reader(), "yt-dlp", 30.0)
     assert "[화면 내용]" in script and "도시가 무너진다" in script and "silent1" in script
+
+
+def test_a_few_short_lines_over_a_long_clip_is_not_narration():
+    from app.references.router import looks_like_speech
+
+    text = "I'm doing a challenge. I'm going to the next level. I'm going to the next level. I'm going to the next level."
+    music = {"duration": 77.0, "segments": [{"start": s, "end": s + 2.0} for s in (0.0, 8.4, 13.8, 20.0)]}
+    spoken = {"duration": 40.0, "segments": [{"start": 0.0, "end": 20.0}, {"start": 22.0, "end": 38.0}]}
+    assert not looks_like_speech(text, music)
+    assert looks_like_speech("What if the Earth really was flat? We all picture the oceans pouring off the edge.", spoken)
