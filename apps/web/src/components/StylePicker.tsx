@@ -4,10 +4,11 @@ interface StylePickerProps {
   readonly value: string | null;
   readonly onPick: (styleId: string) => void;
   readonly disabled?: boolean;
+  readonly recommended?: readonly string[];
 }
 
 /** Style cards with a sample picture each (apps/web/public/styles/<id>.jpg, made by tools/dev/style_samples.py). */
-export function StylePicker({ value, onPick, disabled }: StylePickerProps) {
+export function StylePicker({ value, onPick, disabled, recommended = [] }: StylePickerProps) {
   return (
     <div aria-label="화풍" className="style-grid" role="radiogroup">
       {VISUAL_STYLES.map((s) => (
@@ -22,6 +23,7 @@ export function StylePicker({ value, onPick, disabled }: StylePickerProps) {
         >
           <span className="style-thumb">
             <img alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} src={`/styles/${s.id}.jpg`} />
+            {recommended.includes(s.id) ? <i className="style-rec">추천</i> : null}
           </span>
           <b>{s.label}</b>
           <small>{s.blurb}</small>

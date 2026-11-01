@@ -673,6 +673,7 @@ export default function App() {
                   onBuildScenes={handleBuildScenes}
                   onGenerateVoice={handleGenerateVoice}
                   sceneCount={scenes.length}
+                  topicText={`${project.project_title} ${scripts?.final_script ?? ""}`}
                 />
               )}
               {viewStep === 5 && (

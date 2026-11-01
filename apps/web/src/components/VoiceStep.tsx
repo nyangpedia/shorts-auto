@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 
-import { VISUAL_STYLES } from "../models";
+import { recommendStyles, VISUAL_STYLES } from "../models";
 import { StylePicker } from "./StylePicker";
 import type { ConceptKit } from "../types";
 
@@ -9,14 +9,16 @@ interface VoiceStepProps {
   readonly durationSeconds: number | null;
   readonly conceptKit: ConceptKit | null;
   readonly sceneCount: number;
+  readonly topicText: string; // title + script, read for a style recommendation
   readonly isBusy: boolean;
   readonly busyText: string | null;
   readonly onGenerateVoice: () => void;
   readonly onBuildScenes: (style: string) => void;
 }
 
-export function VoiceStep({ audioUrl, durationSeconds, conceptKit, sceneCount, isBusy, busyText, onGenerateVoice, onBuildScenes }: VoiceStepProps) {
-  const [style, setStyle] = useState(conceptKit?.style_id ?? "webtoon");
+export function VoiceStep({ audioUrl, durationSeconds, conceptKit, sceneCount, topicText, isBusy, busyText, onGenerateVoice, onBuildScenes }: VoiceStepProps) {
+  const recommended = recommendStyles(topicText);
+  const [style, setStyle] = useState(conceptKit?.style_id ?? recommended[0] ?? "webtoon");
   const [audioVersion, setAudioVersion] = useState(0);
 
   useEffect(() => {
@@ -48,7 +50,12 @@ export function VoiceStep({ audioUrl, durationSeconds, conceptKit, sceneCount, i
 
         <div className="card">
           <div className="section-head"><h2>화풍</h2><p>모든 씬에 같은 화풍과 주인공이 적용됩니다</p></div>
-          <StylePicker onPick={setStyle} value={style} />
+          {recommended.length > 0 ? (
+            <p className="muted small" style={{ margin: "0 0 8px" }}>
+              이 주제에는 <b>{recommended.map((id) => VISUAL_STYLES.find((s) => s.id === id)?.label).join(", ")}</b>이(가) 어울려요.
+            </p>
+          ) : null}
+          <StylePicker onPick={setStyle} recommended={recommended} value={style} />
           {conceptKit ? (
             <p className="muted small" style={{ marginTop: 12 }}>
               지금 적용된 화풍: <b>{VISUAL_STYLES.find((s) => s.id === conceptKit.style_id)?.label ?? conceptKit.style_id}</b> · 씬 {sceneCount}개

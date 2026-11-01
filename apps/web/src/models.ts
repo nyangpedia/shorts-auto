@@ -39,4 +39,29 @@ export const VISUAL_STYLES = [
   { id: "nature_doc", label: "다큐 자연 사진", blurb: "자연 다큐 느낌 · 동물·바다·우주" }
 ] as const;
 
+// Words that point to a style, matched as plain substrings of the title + script.
+const STYLE_WORDS: Record<string, readonly string[]> = {
+  cinematic: ["만약", "재난", "지진", "폭발", "멈추", "사라지", "종말", "충돌", "폭풍", "화산", "쓰나미", "핵"],
+  nature_doc: ["동물", "바다", "해양", "우주", "행성", "은하", "블랙홀", "태양", "지구", "숲", "공룡", "곤충"],
+  flat: ["원리", "숫자", "퍼센트", "%", "과학", "실험", "에너지", "원자", "분자", "화학", "물리", "수학", "온도"],
+  isometric: ["규모", "크기", "비교", "면적", "도시"],
+  vintage: ["역사", "미스터리", "괴담", "전쟁", "고대", "옛날", "실종"],
+  pixel: ["게임", "레트로", "픽셀", "아케이드"],
+  watercolor: ["명언", "힐링", "위로", "감성", "행복"],
+  webtoon: ["썰", "경험", "사연"],
+  anime: ["심리", "감정", "성격"],
+  brick: ["재현", "블록", "장난감"],
+  papercraft: ["동화", "종이", "공예"]
+};
+
+/** Up to two styles that suit the topic, best first; empty when nothing in the text points anywhere. */
+export function recommendStyles(text: string): string[] {
+  return Object.entries(STYLE_WORDS)
+    .map(([id, words]) => [id, words.filter((w) => text.includes(w)).length] as const)
+    .filter(([, hits]) => hits > 0)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 2)
+    .map(([id]) => id);
+}
+
 export const modelLabel = (m: ModelChoice) => `${m.name} · ${m.free ? "무료" : "유료"}`;
