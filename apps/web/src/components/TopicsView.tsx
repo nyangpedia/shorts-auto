@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import type { TopicItem } from "../api";
+import type { TopicHistoryItem, TopicItem } from "../api";
 
 interface TopicsViewProps {
   readonly topics: readonly TopicItem[];
@@ -10,10 +10,11 @@ interface TopicsViewProps {
   readonly onOpenProject: (projectId: string) => void;
   readonly onHide: (ids: readonly string[]) => void;
   readonly hidden?: readonly TopicItem[];
+  readonly history?: readonly TopicHistoryItem[];
   readonly onRestore: (ids: readonly string[]) => void;
 }
 
-export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, onHide, hidden = [], onRestore }: TopicsViewProps) {
+export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, onHide, hidden = [], history = [], onRestore }: TopicsViewProps) {
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set());
   const toggle = (id: string) => setPicked((s) => {
     const next = new Set(s);
@@ -28,6 +29,8 @@ export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, o
   }
   const unused = topics.filter((t) => !t.used_by);
   const used = topics.filter((t) => t.used_by);
+  // Made on another PC (or before this PC had the analysis): same login, so the list follows the account.
+  const elsewhere = history.filter((h) => !used.some((t) => t.id === h.topic_id));
 
   return (
     <div className="stack">
@@ -72,6 +75,19 @@ export function TopicsView({ topics, isBusy, busyText, onStart, onOpenProject, o
           ))}
         </div>
       )}
+      {elsewhere.length > 0 ? (
+        <details className="more">
+          <summary>다른 PC에서 만든 주제 ({elsewhere.length})</summary>
+          <div className="topics">
+            {elsewhere.map((item) => (
+              <div className="topic" key={item.topic_id} style={{ opacity: 0.7 }}>
+                <span />
+                <span><b>{item.title}</b><small style={{ display: "block", color: "var(--ink-3)" }}>{item.updated_at.slice(0, 16).replace("T", " ")}</small></span>
+              </div>
+            ))}
+          </div>
+        </details>
+      ) : null}
       {hidden.length > 0 ? (
         <details className="more">
           <summary>삭제한 주제 ({hidden.length})</summary>

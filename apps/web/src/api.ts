@@ -10,6 +10,7 @@ import type {
   ReferenceState,
   ScriptCandidate,
   ScriptsState,
+  TopicHistoryItem,
   TopicItem,
   TopicListing,
   UpdateProjectPayload,
@@ -20,7 +21,7 @@ import type {
 
 import { supabase } from "./supabase";
 
-export type { DailyItem, DailyState, TopicItem, TopicListing, TrendPoint, UsageToday, YouTubeStatus, YouTubeUploadResult } from "./types";
+export type { DailyItem, DailyState, TopicHistoryItem, TopicItem, TopicListing, TrendPoint, UsageToday, YouTubeStatus, YouTubeUploadResult } from "./types";
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   // The API checks membership on every change; the login token proves who is asking.
@@ -117,6 +118,8 @@ export const renderShorts = (projectId: string, title?: string) =>
 // ── side views ──
 export const fetchUsage = () => get<UsageToday>("/api/usage");
 export const fetchTopics = () => get<TopicListing>("/api/topics");
+/** Topics made on any PC with this login (the API shares this PC's used topics first). */
+export const fetchTopicHistory = () => get<{ items: TopicHistoryItem[] }>("/api/topics/history");
 export const hideTopics = (ids: readonly string[]) => post<TopicListing>("/api/topics/hide", { ids });
 export const restoreTopics = (ids: readonly string[]) => post<TopicListing>("/api/topics/restore", { ids });
 export const startTopic = (topic: TopicItem) =>

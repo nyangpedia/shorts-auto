@@ -8,6 +8,7 @@ import {
   factCheckScript,
   fetchDaily,
   fetchKeyStatus,
+  fetchTopicHistory,
   fetchTopics,
   hideTopics,
   restoreTopics,
@@ -40,6 +41,7 @@ import {
   updateScenePrompts,
   type DailyItem,
   type DailyState,
+  type TopicHistoryItem,
   type TopicItem,
   type UsageToday
 } from "./api";
@@ -107,6 +109,7 @@ export default function App() {
   });
   const [topics, setTopics] = useState<readonly TopicItem[]>([]);
   const [hiddenTopics, setHiddenTopics] = useState<readonly TopicItem[]>([]);
+  const [topicHistory, setTopicHistory] = useState<readonly TopicHistoryItem[]>([]);
   const [findCandidates, setFindCandidates] = useState<readonly ReferenceCandidate[]>([]);
   const [daily, setDaily] = useState<DailyState | null>(null);
 
@@ -119,7 +122,10 @@ export default function App() {
       .catch(() => undefined);
   useEffect(refreshKeys, []);
   useEffect(refreshUsage, []);
-  const loadTopics = () => void fetchTopics().then((r) => { setTopics(r.topics); setHiddenTopics(r.hidden ?? []); }).catch(() => undefined);
+  const loadTopics = () => {
+    void fetchTopics().then((r) => { setTopics(r.topics); setHiddenTopics(r.hidden ?? []); }).catch(() => undefined);
+    void fetchTopicHistory().then((r) => setTopicHistory(r.items)).catch(() => undefined);
+  };
   useEffect(loadTopics, []);
   useEffect(() => {
     if (view === "daily" && !daily) void fetchDaily().then(setDaily).catch((reason) => setError(errorText(reason, "오늘의 레퍼런스를 불러오지 못했습니다.")));
@@ -549,7 +555,7 @@ export default function App() {
                 topicsLeft={topics.filter((t) => !t.used_by).length}
               />
             ) : view === "topics" ? (
-              <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} hidden={hiddenTopics} onHide={(ids) => void handleHideTopics(ids)} onRestore={(ids) => void handleHideTopics(ids, true)} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
+              <TopicsView busyText={busy?.text ?? null} isBusy={busy !== null} hidden={hiddenTopics} history={topicHistory} onHide={(ids) => void handleHideTopics(ids)} onRestore={(ids) => void handleHideTopics(ids, true)} onOpenProject={openProjectById} onStart={handleStartTopic} topics={topics} />
             ) : (
               <DailyView
                 busyText={busy?.text ?? null}

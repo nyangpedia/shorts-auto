@@ -232,6 +232,13 @@ export interface TopicItem {
   readonly used_by: string | null;
 }
 
+export interface TopicHistoryItem {
+  readonly topic_id: string;
+  readonly title: string;
+  readonly project_id: string | null;
+  readonly updated_at: string;
+}
+
 export interface TopicListing {
   readonly topics: readonly TopicItem[];
   readonly hidden?: readonly TopicItem[];

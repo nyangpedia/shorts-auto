@@ -37,6 +37,11 @@ def is_active(member: dict | None) -> bool:
     return until is None or datetime.fromisoformat(until.replace("Z", "+00:00")) > datetime.now(timezone.utc)
 
 
+def bearer_token(request: Request) -> str:
+    auth = request.headers.get("authorization", "")
+    return auth[7:] if auth.lower().startswith("bearer ") else ""
+
+
 def create_member_guard(settings_provider: Callable[[], AppSettings], lookup=lookup_member):
     cache: dict[str, tuple[float, bool]] = {}  # token -> (checked at, allowed)
 
@@ -44,8 +49,7 @@ def create_member_guard(settings_provider: Callable[[], AppSettings], lookup=loo
         settings = settings_provider()
         if not settings.vite_supabase_url or request.method in SAFE_METHODS:
             return
-        auth = request.headers.get("authorization", "")
-        token = auth[7:] if auth.lower().startswith("bearer ") else ""
+        token = bearer_token(request)
         if not token:
             raise HTTPException(401, "로그인이 필요합니다.")
         hit = cache.get(token)

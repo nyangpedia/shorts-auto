@@ -34,3 +34,24 @@ def test_topics_are_collected_and_starting_one_copies_the_analysis(tmp_path: Pat
 
     body = client.post("/api/topics/restore", json={"ids": [f"{source}:0"]}).json()
     assert [t["title"] for t in body["topics"]] == ["주제 하나", "주제 둘"] and body["hidden"] == []
+
+
+def test_history_shares_used_topics_and_returns_the_account_list(tmp_path):
+    import json
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "local.settings.json").write_text(
+        '{"vite_supabase_url": "https://x.supabase.co", "vite_supabase_publishable_key": "k"}', encoding="utf-8")
+    seen = {}
+
+    def fake_sync(_settings, token, rows):
+        seen.update(token=token, rows=rows)
+        return [{"topic_id": "other:0", "title": "다른 PC 주제", "project_id": "p", "updated_at": "2026-10-30T01:02:03"}]
+
+    client = TestClient(create_app(repo_root=tmp_path, member_lookup=lambda *_: {"until": None}, topic_sync=fake_sync))
+    assert client.get("/api/topics/history").json() == {"items": []}  # no token, nothing shared
+    body = client.get("/api/topics/history", headers={"Authorization": "Bearer t"}).json()
+    assert seen["token"] == "t" and seen["rows"] == []
+    assert body["items"][0]["title"] == "다른 PC 주제"

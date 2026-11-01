@@ -80,6 +80,7 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - **Supabase `shorts_members` 표** 만들어 둠(2026-10-30, 글모아 프로젝트 안): `user_id, plan, until, daily_limit`, RLS 본인 행 읽기만. 회원 추가·연장은 Supabase SQL Editor에서 `insert ... on conflict do update`로 직접(앱에서는 못 바꿈). 표에 행이 없으면 비회원
 - **아직 없음**: 하루 영상 한도 적용(`daily_limit`은 저장만 됨), 회원가입(글모아 DB 트리거가 약관 동의 메타데이터 없으면 가입 거부 → 쇼츠공방 약관 먼저), 가입 시 무료 행 자동 생성, 비밀번호 재설정, 대본 생성을 서버 경유로 옮기기(지금은 사용자 PC에서 코드를 고치면 우회 가능)
 - 방향: 앱은 사용자 PC에서 돌리고 회원 검사만 서버에서 하는 하이브리드. 글모아 참고 코드: `G:\블로그자동화\블로그자동화` 의 `lib/member.ts`, `supabase/migrations/0001·0006`, `components/MemberGate.tsx`
+- **주제 기록 연동**(2026-11-01): 만든 주제를 Supabase `shorts_topic_log`(user_id, topic_id, title, project_id, updated_at, RLS 본인 행)에 저장, 주제 창고의 "다른 PC에서 만든 주제"로 표시 (`app/core/topic_log.py`, `GET /api/topics/history`). 표가 없거나 로그아웃이면 조용히 빈 목록. 프로젝트 폴더(대본·이미지·영상)는 옮기지 않음
 - 채널명 후보 확정: **과학한입 / Science Bite** (유튜브 핸들 중복은 직접 확인 필요)
 
 ## 2026-10-30 작업·결정

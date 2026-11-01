@@ -8,9 +8,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Callable
 
-from fastapi import APIRouter, Depends, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
+from app.core.members import bearer_token
+from app.core.topic_log import sync_used
 from app.projects.router import MAX_PROJECT_ID_ATTEMPTS, timestamp_id
 from app.projects.service import create_project, list_projects, read_project, save_project
 from app.references.files import (
@@ -66,8 +69,26 @@ class HideTopicsRequest(BaseModel):
     ids: list[str]
 
 
-def create_topics_router(outputs_dir_provider: Callable[[], Path]) -> APIRouter:
+def create_topics_router(outputs_dir_provider: Callable[[], Path], settings_provider=None, sync=sync_used) -> APIRouter:
     router = APIRouter(prefix="/api/topics", tags=["topics"])
+
+    def _sync(request: Request, outputs: Path) -> list[dict]:
+        """Share this PC's used topics with the account and return the account's full list ([] when logged out or offline)."""
+        settings = settings_provider() if settings_provider else None
+        token = bearer_token(request)
+        if settings is None or not settings.vite_supabase_url or not token:
+            return []
+        titles = {t["id"]: t["title"] for t in collect_topics(outputs)}
+        used = _read_json(outputs / USED_TOPICS_FILE)
+        rows = [{"topic_id": tid, "title": titles[tid], "project_id": pid} for tid, pid in used.items() if tid in titles]
+        try:
+            return sync(settings, token, rows)
+        except httpx.HTTPError:
+            return []
+
+    @router.get("/history")
+    def history(request: Request, outputs: Path = Depends(outputs_dir_provider)):
+        return {"items": _sync(request, outputs)}
 
     def _listing(outputs: Path) -> dict:
         return {"topics": collect_topics(outputs), "hidden": collect_topics(outputs, hidden_only=True)}
@@ -91,7 +112,7 @@ def create_topics_router(outputs_dir_provider: Callable[[], Path]) -> APIRouter:
         return _listing(outputs)
 
     @router.post("/{source_project_id}/{index}/start")
-    def start_from_topic(source_project_id: str, index: int, outputs: Path = Depends(outputs_dir_provider)):
+    def start_from_topic(source_project_id: str, index: int, request: Request, outputs: Path = Depends(outputs_dir_provider)):
         topic_id = f"{source_project_id}:{index}"
         topic = next((t for t in collect_topics(outputs) if t["id"] == topic_id), None)
         if topic is None:
@@ -126,6 +147,7 @@ def create_topics_router(outputs_dir_provider: Callable[[], Path]) -> APIRouter:
         used = _read_json(outputs / USED_TOPICS_FILE)
         used[topic_id] = project.project_id
         (outputs / USED_TOPICS_FILE).write_text(json.dumps(used, ensure_ascii=False), encoding="utf-8")
+        _sync(request, outputs)
         return {"project": read_project(outputs, project.project_id).model_dump(), "feedback": f"{index + 1}번 추천 주제로 작성: {topic['title']}"}
 
     return router
