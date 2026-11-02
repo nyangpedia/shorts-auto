@@ -3,7 +3,7 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 
-const signOut = vi.fn();
+const { signOut } = vi.hoisted(() => ({ signOut: vi.fn() }));
 vi.mock("../src/supabase", () => ({
   supabase: { auth: { getSession: () => Promise.resolve({ data: { session: { user: { email: "me@example.com" } } } }), signOut } }
 }));
