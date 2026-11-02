@@ -45,6 +45,7 @@ import {
   type TopicItem,
   type UsageToday
 } from "./api";
+import { AccountBox } from "./components/LoginGate";
 import { AnalysisStep } from "./components/AnalysisStep";
 import { DailyView } from "./components/DailyView";
 import { TopicsView } from "./components/TopicsView";
@@ -517,6 +518,7 @@ export default function App() {
           <span aria-hidden="true">⚙</span><span><b>설정</b><small>API 키 · 유튜브 계정</small></span>
         </button>
         {usageToday ? <UsageMeter usage={usageToday} /> : null}
+        <AccountBox />
       </aside>
 
       <section className="main">

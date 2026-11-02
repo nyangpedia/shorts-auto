@@ -40,23 +40,7 @@ export function LoginGate({ children }: { readonly children: ReactNode }) {
   }
 
   if (signedIn === null) return null;
-  if (signedIn) {
-    return (
-      <>
-        {children}
-        {supabase && (
-          <button
-            className="secondary-button"
-            onClick={() => void supabase?.auth.signOut()}
-            style={{ position: "fixed", right: 12, bottom: 12, width: "auto", padding: "4px 12px", fontSize: 12, zIndex: 50 }}
-            type="button"
-          >
-            로그아웃
-          </button>
-        )}
-      </>
-    );
-  }
+  if (signedIn) return <>{children}</>;
 
   return (
     <main className="lg">
@@ -124,5 +108,20 @@ export function LoginGate({ children }: { readonly children: ReactNode }) {
         </div>
       </section>
     </main>
+  );
+}
+
+/** Signed-in email and a logout button for the sidebar; nothing when login is off. */
+export function AccountBox() {
+  const [email, setEmail] = useState("");
+  useEffect(() => {
+    void supabase?.auth.getSession().then(({ data }) => setEmail(data.session?.user.email ?? ""));
+  }, []);
+  if (!supabase) return null;
+  return (
+    <div className="rail-account">
+      <span title={email}>{email || "로그인됨"}</span>
+      <button onClick={() => void supabase?.auth.signOut()} type="button">로그아웃</button>
+    </div>
   );
 }
