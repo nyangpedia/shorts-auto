@@ -57,10 +57,11 @@
   60% { opacity: 1; scale: 0.97; filter: brightness(1.4); }
   100% { opacity: 1; scale: 1; filter: none; }
 }
-.lg-bar { position: absolute; top: 10px; left: 10px; right: 10px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.28); }
+.lg-bar { z-index: 1; position: absolute; top: 10px; left: 10px; right: 10px; height: 4px; border-radius: 4px; background: rgba(255, 255, 255, 0.28); }
 .lg-bar::after { content: ""; display: block; height: 100%; width: var(--p); border-radius: 4px; background: #fff; }
-.lg-sun { position: absolute; left: 50%; top: 34%; width: 62%; aspect-ratio: 1; translate: -50% -50%; border-radius: 50%; background: radial-gradient(circle, rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0) 70%); }
-.lg-sub { position: absolute; left: 8px; right: 8px; bottom: 16%; margin: 0; text-align: center; font-weight: 900; font-size: clamp(14px, 1.5vw, 19px); line-height: 1.25; letter-spacing: -0.03em; color: #fff; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); }
+.lg-pic { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.lg-phone::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0, 0, 0, 0.78) 0%, rgba(0, 0, 0, 0.25) 38%, transparent 60%); }
+.lg-sub { z-index: 1; position: absolute; left: 8px; right: 8px; bottom: 16%; margin: 0; text-align: center; font-weight: 900; font-size: clamp(14px, 1.5vw, 19px); line-height: 1.25; letter-spacing: -0.03em; color: #fff; text-shadow: 0 2px 8px rgba(0, 0, 0, 0.7); }
 .lg-sub b { color: var(--lg-spark); }
 
 .lg-sparks { position: absolute; inset: 0; pointer-events: none; }

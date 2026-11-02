@@ -101,17 +101,17 @@ export function LoginGate({ children }: { readonly children: ReactNode }) {
       <section aria-hidden="true" className="lg-stage">
         <div className="lg-phone a">
           <div className="lg-bar" style={{ "--p": "70%" } as CSSProperties} />
-          <div className="lg-sun" />
+          <img alt="" className="lg-pic" onError={(e) => e.currentTarget.remove()} src="/login/a.jpg" />
           <p className="lg-sub">지구가 <b>멈추면</b><br />어떻게 될까?</p>
         </div>
         <div className="lg-phone b">
           <div className="lg-bar" style={{ "--p": "35%" } as CSSProperties} />
-          <div className="lg-sun" />
+          <img alt="" className="lg-pic" onError={(e) => e.currentTarget.remove()} src="/login/b.jpg" />
           <p className="lg-sub">대본부터 <b>자막</b>까지<br />한 번에</p>
         </div>
         <div className="lg-phone c">
           <div className="lg-bar" style={{ "--p": "90%" } as CSSProperties} />
-          <div className="lg-sun" />
+          <img alt="" className="lg-pic" onError={(e) => e.currentTarget.remove()} src="/login/c.jpg" />
           <p className="lg-sub">이게 <b>진짜</b>라고?</p>
         </div>
         <div className="lg-sparks">
