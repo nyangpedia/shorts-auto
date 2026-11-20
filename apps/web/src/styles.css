@@ -144,7 +144,7 @@ details.more { border-top: 1px solid var(--line); margin-top: 14px; padding-top:
 details.more summary { cursor: pointer; font-size: 13px; color: var(--ink-2); font-weight: 600; }
 
 /* ── 1 reference ───────────────────────── */
-.search-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px auto; gap: 10px; }
+.search-row { display: grid; grid-template-columns: minmax(0, 1fr) 150px 130px auto; gap: 10px; }
 .search-extra { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-top: 10px; }
 .direct-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; margin-top: 10px; }
 .refs { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; margin-top: 18px; }

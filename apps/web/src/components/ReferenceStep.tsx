@@ -20,6 +20,17 @@ const DURATIONS: readonly { value: DurationFilter; label: string; max: number }[
   { value: "all", label: "전체 길이", max: 600 }
 ];
 
+// Searches run in 7-day windows (100 quota units per keyword per window), so a longer period costs more:
+// a genre button is 600 units for 7 days, 1,800 for 15, 3,000 for 30 (of the 10,000 a day).
+const PERIODS: readonly { value: string; label: string }[] = [
+  { value: "7", label: "최근 7일" },
+  { value: "15", label: "최근 15일" },
+  { value: "30", label: "최근 30일" },
+  { value: "all", label: "전체 기간" }
+];
+const sinceDays = (days: string) => (days === "all" ? "" : new Date(Date.now() - Number(days) * 86_400_000).toISOString().slice(0, 10));
+const fmtDate = (iso: string) => new Date(iso).toLocaleDateString("ko-KR", { month: "numeric", day: "numeric" });
+
 // Two keywords each in Korean, English and Japanese: YouTube returns results in the query's language,
 // and one phrasing misses videos titled another way. 6 searches = 600 quota units (cached for the day).
 const GENRES = [
@@ -57,7 +68,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
   const [channel, setChannel] = useState("");
   const [minViews, setMinViews] = useState("");
   const [maxSubs, setMaxSubs] = useState("");
-  const [after, setAfter] = useState("");
+  const [days, setDays] = useState("7");
   const [directUrl, setDirectUrl] = useState("");
 
   function search(event: FormEvent) {
@@ -85,6 +96,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
 
   function runSearch(text: string) {
     if (isBusy || (!text.trim() && !channel.trim())) return;
+    const after = sinceDays(days);
     onSearch({
       keyword: text.trim() || undefined,
       channel_query: channel.trim() || undefined,
@@ -118,6 +130,9 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
           <select aria-label="영상 길이" className="select" onChange={(e) => setDuration(e.target.value as DurationFilter)} value={duration}>
             {DURATIONS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
           </select>
+          <select aria-label="기간" className="select" onChange={(e) => setDays(e.target.value)} value={days}>
+            {PERIODS.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
           <button className="btn primary" disabled={isBusy || (!keyword.trim() && !channel.trim())} type="submit">
             {isBusy ? "검색 중…" : "검색"}
           </button>
@@ -135,13 +150,12 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
           ))}
         </div>
         <p className="muted small" style={{ margin: "10px 0 0" }}>
-          분야를 누르면 바로 검색하고, 새 프로젝트에선 마지막 분야로 자동 검색합니다. 해외 쇼츠는 그 나라 말 키워드로만 나옵니다. 쉼표로 나눈 키워드마다 검색하며(최대 9개), 키워드 1개당 YouTube 무료 한도 100포인트(하루 10,000)를 씁니다. 분야 버튼은 600포인트이고, 같은 날 같은 검색은 저장된 결과를 써서 한도를 쓰지 않습니다.
+          분야를 누르면 바로 검색하고, 새 프로젝트에선 마지막 분야로 자동 검색합니다. 해외 쇼츠는 그 나라 말 키워드로만 나옵니다. 쉼표로 나눈 키워드마다 검색하며(최대 9개), 키워드 1개당 YouTube 무료 한도 100포인트(하루 10,000)를 씁니다. 분야 버튼은 기간이 7일이면 600포인트(15일 1,800 · 30일 3,000)이고, 같은 날 같은 검색은 저장된 결과를 써서 한도를 쓰지 않습니다. 배율은 영상의 전체 조회수 기준이라, 최근 뜨는 영상을 보려면 기간을 짧게 두세요.
         </p>
         <details className="more">
-          <summary>상세 조건 (채널, 기간, 조회수)</summary>
+          <summary>상세 조건 (채널, 조회수, 구독자)</summary>
           <div className="search-extra">
             <label className="field">채널 (선택)<input className="input" onChange={(e) => setChannel(e.target.value)} placeholder="@채널 또는 URL" value={channel} /></label>
-            <label className="field">이 날짜 이후 업로드<input className="input" onChange={(e) => setAfter(e.target.value)} type="date" value={after} /></label>
             <label className="field">최소 조회수<input className="input" min="0" onChange={(e) => setMinViews(e.target.value)} type="number" value={minViews} /></label>
             <label className="field">최대 구독자<input className="input" min="0" onChange={(e) => setMaxSubs(e.target.value)} type="number" value={maxSubs} /></label>
           </div>
@@ -189,7 +203,7 @@ export function ReferenceStep({ candidates, selectedReference, isBusy, onSearch,
               <div className="ref-body">
                 <b>{c.title}</b>
                 {c.title_ko && <span className="ref-ko">🇰🇷 {c.title_ko}</span>}
-                <small>{c.channel_name} · 조회수 {fmt(c.view_count)}</small>
+                <small>{c.channel_name} · 조회수 {fmt(c.view_count)} · {fmtDate(c.upload_date)}</small>
               </div>
             </button>
           ))}

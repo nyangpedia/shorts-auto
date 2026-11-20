@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import json
+import os
 from concurrent.futures import ThreadPoolExecutor
 import logging
 import re
+import threading
 from datetime import date
 from pathlib import Path
 from typing import Callable
@@ -55,6 +57,26 @@ TRANSLATE_TIMEOUT = 60  # seconds
 TRANSLATE_LIMIT = 60  # the top of the list (sorted by views/subscriber) is what gets looked at; more makes one call too slow
 AFTER_STT = WORKFLOW_STEPS[2:]  # Analysis … Render
 AFTER_ANALYSIS = ("Candidates", "Script", "Production", "Render")
+
+
+def load_search_cache(path: Path) -> dict:
+    """The saved searches; if the file has junk after the JSON (two writes overlapped), keep the valid part."""
+    try:
+        text = path.read_text(encoding="utf-8")
+    except OSError:
+        return {}
+    try:
+        cache, _ = json.JSONDecoder().raw_decode(text)
+    except ValueError:
+        return {}
+    return cache if isinstance(cache, dict) else {}
+
+
+def save_search_cache(path: Path, cache: dict) -> None:
+    """Write to a temp file and swap it in, so a reader or a second writer never sees half a file."""
+    temp = path.with_suffix(".tmp")
+    temp.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+    os.replace(temp, path)
 
 
 def add_korean_titles(candidates: list[ReferenceCandidate], make_client: Callable[[], AnalysisClient]) -> list[ReferenceCandidate]:
@@ -116,14 +138,13 @@ def create_references_router(
 ) -> APIRouter:
     router = APIRouter(prefix="/api/projects/{project_id}/reference", tags=["reference"])
 
+    cache_lock = threading.Lock()
+
     # ── search, cached per day on disk (a genre button is 6 searches = 600 quota units) ──
     def cached_search(payload: ReferenceSearchRequest, outputs: Path, settings: AppSettings) -> list[ReferenceCandidate]:
         key = f"{date.today()}|{payload.model_dump_json()}"
         cache_path = outputs / SEARCH_CACHE_FILE
-        try:
-            cache = json.loads(cache_path.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            cache = {}
+        cache = load_search_cache(cache_path)
         if key in cache:
             return [ReferenceCandidate.model_validate(item) for item in cache[key]]
         found = add_korean_titles(
@@ -131,9 +152,10 @@ def create_references_router(
             lambda: analysis_client_factory(settings.llm_api_key, settings.openai_analysis_model),
         )
         today = key.split("|", 1)[0]
-        cache = {k: v for k, v in cache.items() if k.startswith(today)}  # only today's searches are kept
-        cache[key] = [c.model_dump() for c in found]
-        cache_path.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+        with cache_lock:  # a genre button sends several searches at once; each re-reads the file so none is lost
+            cache = {k: v for k, v in load_search_cache(cache_path).items() if k.startswith(today)}  # only today's searches are kept
+            cache[key] = [c.model_dump() for c in found]
+            save_search_cache(cache_path, cache)
         return found
 
     def folder(outputs: Path, project_id: str) -> Path:

@@ -77,6 +77,36 @@ def sort_by_vs_ratio(candidates: list[ReferenceCandidate]) -> list[ReferenceCand
     return sorted(candidates, key=lambda c: (c.vs_ratio is not None, c.vs_ratio or 0, c.view_count), reverse=True)
 
 
+# ── staying on topic ────────────────────────────────────────────────────────
+# YouTube's search is loose ("what would happen if" also finds a depression clip), and the list is sorted by
+# views per subscriber, so an off-topic viral video can sit at the top. Videos that mention none of the
+# search's subject words go below the ones that do (never dropped: a short title can hide a good match).
+
+_FILLER = {
+    "what", "would", "happen", "happens", "if", "the", "and", "for", "with", "you", "your", "does", "will", "can", "how", "why",
+    "when", "are", "was", "were", "facts", "fact", "만약", "만약에", "일어나는", "어떻게", "생기는", "벌어지는", "갑자기", "もしも", "もし",
+}
+
+
+def topic_stems(keywords: list[str]) -> set[str]:
+    """Subject words of the keywords: whole Latin words, the first two characters of Hangul/Kanji words (어미 변화 대비)."""
+    stems: set[str] = set()
+    for keyword in keywords:
+        for word in re.findall(r"[A-Za-z]{3,}|[가-힣]{2,}|[぀-ヿ一-鿿]{2,}", keyword):
+            low = word.lower()
+            if low not in _FILLER:
+                stems.add(low if low.isascii() else low[:2])
+    return stems
+
+
+def prefer_on_topic(candidates: list[ReferenceCandidate], texts: dict[str, str], stems: set[str]) -> list[ReferenceCandidate]:
+    """Stable partition: candidates whose title/description/tags contain a subject word first, the rest after."""
+    if not stems:
+        return candidates
+    on_topic = [c for c in candidates if any(s in texts.get(c.video_id, "") for s in stems)]
+    return on_topic + [c for c in candidates if c not in on_topic]
+
+
 def _batches(items: list, size: int = BATCH):
     for start in range(0, len(items), size):
         yield items[start:start + size]
@@ -195,7 +225,7 @@ class YouTubeClient:
                     video_id = item.get("id", {}).get("videoId")
                     if video_id and video_id not in ids:
                         ids.append(video_id)
-        return self._hydrate(ids, "search", request)[: request.max_results * len(keywords)]
+        return self._hydrate(ids, "search", request, topic_stems(keywords))[: request.max_results * len(keywords)]
 
     def _latest_uploads(self, playlist_id: str, wanted: int) -> list[str]:
         limit = min(200, max(50, wanted * 4))  # extra, because duration/view filters drop many
@@ -221,9 +251,11 @@ class YouTubeClient:
             raise ValueError("YouTube video not found or unavailable")
         return found[0]
 
-    def _hydrate(self, video_ids: list[str], source_type: str, request: ReferenceSearchRequest | None) -> list[ReferenceCandidate]:
+    def _hydrate(self, video_ids: list[str], source_type: str, request: ReferenceSearchRequest | None,
+                 stems: set[str] | None = None) -> list[ReferenceCandidate]:
         """Fetch stats for the ids (with their channels) and apply the request's filters."""
         results: list[ReferenceCandidate] = []
+        texts: dict[str, str] = {}
         for batch in _batches(video_ids):
             videos = {v["id"]: v for v in self._get("videos", part="snippet,contentDetails,statistics", id=",".join(batch)).get("items", [])}
             channel_ids = sorted({v["snippet"]["channelId"] for v in videos.values() if "snippet" in v})
@@ -236,7 +268,10 @@ class YouTubeClient:
                 candidate = self._to_candidate(video_id, videos.get(video_id), channels, source_type, request)
                 if candidate:
                     results.append(candidate)
-        return sort_by_vs_ratio(results)
+                    snippet = videos[video_id]["snippet"]
+                    texts[video_id] = " ".join([snippet.get("title", ""), snippet.get("description", ""), " ".join(snippet.get("tags") or [])]).lower()
+        ranked = sort_by_vs_ratio(results)
+        return prefer_on_topic(ranked, texts, stems) if stems else ranked
 
     @staticmethod
     def _to_candidate(video_id, video, channels, source_type, request) -> ReferenceCandidate | None:

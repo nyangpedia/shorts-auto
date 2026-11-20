@@ -118,3 +118,31 @@ def test_malformed_analysis(bad):
 def test_single_strings_become_lists():
     fixed = validate_reference_analysis({**ANALYSIS, "risk_notes": "하나의 위험", "supporting_structures": "단일 구조"})
     assert (fixed["risk_notes"], fixed["supporting_structures"]) == (["하나의 위험"], ["단일 구조"])
+
+
+def test_topic_words_demote_off_topic_viral_videos():
+    from app.references.models import ReferenceCandidate
+    from app.references.youtube import prefer_on_topic, topic_stems
+
+    stems = topic_stems(["만약 지구에서 사라진다면", "what would happen if", "what if earth", "もしも 地球", "もし 消えたら"])
+    assert stems == {"지구", "사라", "earth", "地球", "消え"}  # filler words (만약, what, would, if, もしも) carry no subject
+
+    def candidate(video_id):
+        return ReferenceCandidate(video_id=video_id, url="u", title=video_id, channel_id="c", channel_name="c", thumbnail_url="t",
+                                  upload_date="2026-11-18T00:00:00Z", duration_seconds=30, view_count=1, source_type="search")
+
+    ranked = [candidate("viral"), candidate("on_topic"), candidate("also_on_topic")]  # already sorted by views per subscriber
+    texts = {"viral": "계속 머릿속은 삶의 의미를 찾음#우울증", "on_topic": "태양이 사라지면 지구는", "also_on_topic": "what if earth was flat"}
+    assert [c.video_id for c in prefer_on_topic(ranked, texts, stems)] == ["on_topic", "also_on_topic", "viral"]
+    assert prefer_on_topic(ranked, texts, set()) == ranked  # nothing to judge by: order untouched
+
+
+def test_search_cache_survives_junk_after_the_json_and_swaps_atomically(tmp_path):
+    from app.references.router import load_search_cache, save_search_cache
+
+    path = tmp_path / "_search_cache.json"
+    path.write_text('{"2026-11-20|a": [1]}' + '"tail left by an overlapping write": 1', encoding="utf-8")
+    assert load_search_cache(path) == {"2026-11-20|a": [1]}
+    save_search_cache(path, {"2026-11-20|b": [2]})
+    assert load_search_cache(path) == {"2026-11-20|b": [2]} and not path.with_suffix(".tmp").exists()
+    assert load_search_cache(tmp_path / "missing.json") == {}
