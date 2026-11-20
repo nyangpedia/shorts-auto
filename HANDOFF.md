@@ -109,6 +109,11 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - `OUTPUT_DIR`은 상대 경로만 허용(코드가 절대 경로·`..` 거부)이라 폴더 이동은 junction으로만 가능 — 지금은 안 씀
 - 로그인 화면 폰 3개에 실제 영상 장면(`apps/web/public/login/*.jpg`, 배포 때는 직접 만든 샘플로 교체 권장), 로그아웃은 사이드바 `AccountBox`(이메일 표시)로 이동
 
+## 바로가기로 실행 (설치 파일은 아직 없음)
+- `쇼츠공방 실행.bat`(저장소 맨 위) 더블클릭 → API·웹 서버를 켜고 준비되면 브라우저를 엶. 이미 켜져 있으면 브라우저만 열고, 창을 닫으면 서버가 꺼짐 (`tools/dev/start-dev.mjs --open`)
+- 바탕화면 바로가기는 PC마다 만들어야 함(저장소에 없음): 대상 `쇼츠공방 실행.bat`, 아이콘 `tools/dev/shorts.ico`, 실행 크기 "최소화" (PowerShell `WScript.Shell`의 `CreateShortcut`)
+- 필요한 것: Node.js, ffmpeg, `apps/api/.venv` 설치가 끝난 PC. 진짜 설치 파일(압축 풀고 바로 실행)은 배포 단계에서 따로
+
 ## 집에서 이어서 (다음 작업 순서)
 1. `git pull` 후 `npx -y pnpm@9 install`, 웹 서버 재시작
 2. **서버(API)가 Supabase 로그인 토큰 검증** (FastAPI, 공개 JWKS로 검증, 비밀 키 불필요). 배포 모드는 **값이 없으면 앱이 안 열리게**(지금은 꺼짐)
