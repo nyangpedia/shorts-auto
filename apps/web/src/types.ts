@@ -232,6 +232,18 @@ export interface TopicItem {
   readonly used_by: string | null;
 }
 
+/** One project an account has made on some PC (files stay on that PC). */
+export interface ProjectHistoryItem {
+  readonly project_id: string;
+  readonly title: string;
+  readonly step: string;
+  readonly rendered: boolean;
+  readonly uploaded: boolean;
+  readonly archived: boolean;
+  readonly device: string;
+  readonly updated_at: string;
+}
+
 export interface TopicHistoryItem {
   readonly topic_id: string;
   readonly title: string;

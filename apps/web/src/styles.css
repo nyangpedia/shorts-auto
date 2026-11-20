@@ -346,3 +346,7 @@ details.more summary { cursor: pointer; font-size: 13px; color: var(--ink-2); fo
 .style-current { display: inline-flex; align-items: center; gap: 8px; min-width: 170px; text-align: left; cursor: pointer; }
 .style-current img { width: 20px; height: 34px; object-fit: cover; border-radius: 4px; }
 .style-panel { margin-bottom: 16px; }
+
+.other-pcs { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.other-pcs li { display: grid; gap: 2px; padding: 10px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--line); }
+.other-pcs span { color: var(--ink-3); font-size: 12.5px; }

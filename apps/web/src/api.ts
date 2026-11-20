@@ -10,6 +10,7 @@ import type {
   ReferenceState,
   ScriptCandidate,
   ScriptsState,
+  ProjectHistoryItem,
   TopicHistoryItem,
   TopicItem,
   TopicListing,
@@ -21,7 +22,7 @@ import type {
 
 import { supabase } from "./supabase";
 
-export type { DailyItem, DailyState, TopicHistoryItem, TopicItem, TopicListing, TrendPoint, UsageToday, YouTubeStatus, YouTubeUploadResult } from "./types";
+export type { DailyItem, DailyState, ProjectHistoryItem, TopicHistoryItem, TopicItem, TopicListing, TrendPoint, UsageToday, YouTubeStatus, YouTubeUploadResult } from "./types";
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   // The API checks membership on every change; the login token proves who is asking.
@@ -119,6 +120,7 @@ export const renderShorts = (projectId: string, title?: string) =>
 export const fetchUsage = () => get<UsageToday>("/api/usage");
 export const fetchTopics = () => get<TopicListing>("/api/topics");
 /** Topics made on any PC with this login (the API shares this PC's used topics first). */
+export const fetchProjectHistory = () => get<{ device: string; items: ProjectHistoryItem[] }>("/api/projects/history");
 export const fetchTopicHistory = () => get<{ items: TopicHistoryItem[] }>("/api/topics/history");
 export const hideTopics = (ids: readonly string[]) => post<TopicListing>("/api/topics/hide", { ids });
 export const restoreTopics = (ids: readonly string[]) => post<TopicListing>("/api/topics/restore", { ids });

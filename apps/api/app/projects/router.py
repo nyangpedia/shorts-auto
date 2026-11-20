@@ -5,8 +5,12 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Callable, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
+import httpx
 from pydantic import BaseModel
+
+from app.core.members import bearer_token
+from app.core.project_log import device_name, project_row, sync_projects
 
 from app.projects.service import create_project, delete_project, list_projects, read_project, set_project_archived, update_project_title
 
@@ -33,13 +37,26 @@ def _as_http(exc: Exception) -> HTTPException:
     return HTTPException(status_code=400, detail=str(exc))
 
 
-def create_projects_router(outputs_dir_provider: Callable[[], Path]) -> APIRouter:
+def create_projects_router(outputs_dir_provider: Callable[[], Path], settings_provider=None, sync=sync_projects) -> APIRouter:
     router = APIRouter(prefix="/api/projects", tags=["projects"])
     Outputs = Depends(outputs_dir_provider)
 
     @router.get("")
     def get_projects(outputs: Path = Outputs):
         return {"projects": [p.model_dump() for p in list_projects(outputs)]}
+
+    @router.get("/history")
+    def history(request: Request, outputs: Path = Outputs):
+        """Share this PC's projects with the account and return what every PC has made ([] when logged out or offline)."""
+        device = device_name()
+        settings = settings_provider() if settings_provider else None
+        token = bearer_token(request)
+        if settings is None or not settings.vite_supabase_url or not token:
+            return {"device": device, "items": []}
+        try:
+            return {"device": device, "items": sync(settings, token, [project_row(p, device) for p in list_projects(outputs)])}
+        except httpx.HTTPError:
+            return {"device": device, "items": []}
 
     @router.post("")
     def post_project(payload: CreateProjectRequest, outputs: Path = Outputs):

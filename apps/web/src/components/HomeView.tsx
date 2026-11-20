@@ -1,9 +1,11 @@
-import type { Project } from "../types";
+import type { Project, ProjectHistoryItem } from "../types";
 
 interface HomeViewProps {
   readonly projects: readonly Project[];
   readonly topicsLeft: number;
   readonly stepLabel: (project: Project) => string;
+  /** Projects the account made on other PCs (their files are not here). */
+  readonly otherPcs?: readonly ProjectHistoryItem[];
   readonly onNew: () => void;
   readonly onOpen: (project: Project) => void;
   readonly onGo: (view: "daily" | "topics" | "settings") => void;
@@ -18,7 +20,7 @@ const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 const thumb = (p: Project) => `/api/projects/${encodeURIComponent(p.project_id)}/production/scenes/scene_01_start.png`;
 const name = (p: Project) => (p.project_title === "untitled" ? p.display_name : p.project_title);
 
-export function HomeView({ projects, topicsLeft, stepLabel, onNew, onOpen, onGo, missingKeys }: HomeViewProps) {
+export function HomeView({ projects, otherPcs = [], topicsLeft, stepLabel, onNew, onOpen, onGo, missingKeys }: HomeViewProps) {
   const now = Date.now();
   const thisWeek = projects.filter((p) => now - Date.parse(p.updated_at) < WEEK_MS);
   const madeThisWeek = thisWeek.filter((p) => p.generated_files.final_video).length;
@@ -79,6 +81,22 @@ export function HomeView({ projects, topicsLeft, stepLabel, onNew, onOpen, onGo,
           ))}
         </div>
       )}
+
+      {otherPcs.length > 0 ? (
+        <>
+          <div className="section-head"><h2>다른 PC에서 만든 작업</h2><p>기록만 보입니다. 파일은 만든 PC에 있어요.</p></div>
+          <ul className="other-pcs">
+            {otherPcs.slice(0, 12).map((r) => (
+              <li key={`${r.device}:${r.project_id}`}>
+                <b>{r.title}</b>
+                <span>
+                  {r.uploaded ? "업로드 완료" : r.rendered ? "렌더링 완료" : `${r.step} 단계`} · {r.device} · {new Date(r.updated_at).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
     </div>
   );
 }

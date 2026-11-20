@@ -122,3 +122,25 @@ def test_missing_project_does_not_leak_paths(client, tmp_path: Path):
         response = client.get(path)
         assert (response.status_code, response.json()["detail"]) == (404, "Project not found")
         assert str(tmp_path) not in response.text
+
+
+def test_history_shares_this_pcs_projects_and_returns_every_pcs_list(tmp_path):
+    from fastapi.testclient import TestClient
+    from app.main import create_app
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "local.settings.json").write_text(
+        '{"vite_supabase_url": "https://x.supabase.co", "vite_supabase_publishable_key": "k"}', encoding="utf-8")
+    seen = {}
+
+    def fake_sync(_settings, token, rows):
+        seen.update(token=token, rows=rows)
+        return [{"project_id": "261101_0900", "title": "집에서 만든 것", "step": "완성", "rendered": True, "uploaded": False,
+                 "archived": False, "device": "HOME", "updated_at": "2026-11-01T09:00:00+00:00"}]
+
+    client = TestClient(create_app(repo_root=tmp_path, member_lookup=lambda *_: {"until": None}, project_sync=fake_sync))
+    client.post("/api/projects", json={"project_title": "회사 프로젝트"}, headers={"Authorization": "Bearer t"})
+    assert client.get("/api/projects/history").json()["items"] == []  # no token: nothing is shared
+    body = client.get("/api/projects/history", headers={"Authorization": "Bearer t"}).json()
+    assert [r["title"] for r in seen["rows"]] == ["회사 프로젝트"] and seen["rows"][0]["step"] == "레퍼런스"
+    assert seen["rows"][0]["device"] == body["device"] and body["items"][0]["device"] == "HOME"

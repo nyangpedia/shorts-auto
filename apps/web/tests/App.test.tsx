@@ -42,6 +42,7 @@ describe("App", () => {
     mocked.fetchUsage.mockResolvedValue({ llm: 3, llm_limit: 100, image: 0, image_limit: 200, tts: 1 });
     mocked.fetchTopics.mockResolvedValue({ topics: [] });
     mocked.fetchTopicHistory.mockResolvedValue({ items: [] });
+    mocked.fetchProjectHistory.mockResolvedValue({ device: "TEST", items: [] });
     mocked.fetchDaily.mockResolvedValue({ keywords: [], fetched_on: null, items: [] });
   });
 

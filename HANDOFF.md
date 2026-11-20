@@ -102,6 +102,13 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 사용자가 "리모션(옛 영상)이 더 좋았다"고 한 말과 "하이퍼프레임이 움직임이 많아 괜찮다"고 한 말이 따로 있음 → 모션 기본값은 2.5D 유지 (기록 시각은 UTC라 한국 시간은 +9시간)
 - `PROGRESS.md`(10/30 13:25, 이 세션이 만들지 않음, 내용이 낡음)는 커밋하지 않음 — 쓰는 규칙 확인 필요
 
+## 2026-11-20 작업 내역 동기화 (파일은 각 PC, 기록만 계정)
+- OneDrive 등 폴더 동기화는 **하지 않기로 결정**(사용자가 안 씀). 프로젝트 파일은 각 PC `outputs/`에 두고, "무엇을 만들었는지"만 Supabase에 모음
+- `GET /api/projects/history`(`app/projects/router.py`, `app/core/project_log.py`): 이 PC 프로젝트를 `shorts_project_log`에 upsert(기본 키 user_id+device+project_id)하고 모든 PC 기록을 반환. 홈 화면에 "다른 PC에서 만든 작업" 목록(`HomeView.tsx`)
+- **표 생성 필요**: `tools/sql/shorts_logs.sql`을 Supabase SQL Editor에서 실행(`shorts_project_log` + 아직 없던 `shorts_topic_log`, RLS 본인 행). 표가 없으면 목록이 비어 있을 뿐 오류는 안 남
+- `OUTPUT_DIR`은 상대 경로만 허용(코드가 절대 경로·`..` 거부)이라 폴더 이동은 junction으로만 가능 — 지금은 안 씀
+- 로그인 화면 폰 3개에 실제 영상 장면(`apps/web/public/login/*.jpg`, 배포 때는 직접 만든 샘플로 교체 권장), 로그아웃은 사이드바 `AccountBox`(이메일 표시)로 이동
+
 ## 집에서 이어서 (다음 작업 순서)
 1. `git pull` 후 `npx -y pnpm@9 install`, 웹 서버 재시작
 2. **서버(API)가 Supabase 로그인 토큰 검증** (FastAPI, 공개 JWKS로 검증, 비밀 키 불필요). 배포 모드는 **값이 없으면 앱이 안 열리게**(지금은 꺼짐)

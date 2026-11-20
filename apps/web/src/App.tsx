@@ -8,6 +8,7 @@ import {
   factCheckScript,
   fetchDaily,
   fetchKeyStatus,
+  fetchProjectHistory,
   fetchTopicHistory,
   fetchTopics,
   hideTopics,
@@ -41,6 +42,7 @@ import {
   updateScenePrompts,
   type DailyItem,
   type DailyState,
+  type ProjectHistoryItem,
   type TopicHistoryItem,
   type TopicItem,
   type UsageToday
@@ -111,6 +113,7 @@ export default function App() {
   const [topics, setTopics] = useState<readonly TopicItem[]>([]);
   const [hiddenTopics, setHiddenTopics] = useState<readonly TopicItem[]>([]);
   const [topicHistory, setTopicHistory] = useState<readonly TopicHistoryItem[]>([]);
+  const [projectHistory, setProjectHistory] = useState<{ readonly device: string; readonly items: readonly ProjectHistoryItem[] }>({ device: "", items: [] });
   const [findCandidates, setFindCandidates] = useState<readonly ReferenceCandidate[]>([]);
   const [daily, setDaily] = useState<DailyState | null>(null);
 
@@ -128,6 +131,9 @@ export default function App() {
     void fetchTopicHistory().then((r) => setTopicHistory(r.items)).catch(() => undefined);
   };
   useEffect(loadTopics, []);
+  useEffect(() => {
+    void fetchProjectHistory().then(setProjectHistory).catch(() => undefined);
+  }, [projects.length]);
   useEffect(() => {
     if (view === "daily" && !daily) void fetchDaily().then(setDaily).catch((reason) => setError(errorText(reason, "오늘의 레퍼런스를 불러오지 못했습니다.")));
     if (view === "topics") loadTopics();
@@ -552,6 +558,7 @@ export default function App() {
                 onGo={setView}
                 onNew={startNewProject}
                 onOpen={handleSelectProject}
+                otherPcs={projectHistory.items.filter((r) => r.device !== projectHistory.device && !projects.some((p) => p.project_id === r.project_id))}
                 projects={projects}
                 stepLabel={(p) => (p.generated_files.final_video ? "완성" : STEP_KO[p.current_step] ?? p.current_step)}
                 topicsLeft={topics.filter((t) => !t.used_by).length}

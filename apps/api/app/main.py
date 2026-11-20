@@ -10,6 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core import usage
 from app.core.keys_router import create_keys_router
 from app.core.members import create_member_guard, lookup_member
+from app.core.project_log import sync_projects
 from app.core.topic_log import sync_used
 from app.core.paths import find_repo_root
 from app.core.settings import load_settings
@@ -41,6 +42,7 @@ def create_app(
     upload_transport=None,
     member_lookup=lookup_member,
     topic_sync=sync_used,
+    project_sync=sync_projects,
 ) -> FastAPI:
     root = repo_root or find_repo_root()
     settings = load_settings(root)  # one object, updated in place when keys are saved
@@ -85,7 +87,7 @@ def create_app(
         }
 
     for router in (
-        create_projects_router(outputs_dir_provider),
+        create_projects_router(outputs_dir_provider, settings_provider, project_sync),
         create_jobs_router(outputs_dir_provider),
         create_references_router(outputs_dir_provider, settings_provider, youtube_client_factory, audio_extractor,
                                  transcription_client_factory, analysis_client_factory),
