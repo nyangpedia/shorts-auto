@@ -110,7 +110,7 @@ cd apps/api && python -m venv .venv && .venv/Scripts/python -m pip install -r re
 - 로그인 화면 폰 3개에 실제 영상 장면(`apps/web/public/login/*.jpg`, 배포 때는 직접 만든 샘플로 교체 권장), 로그아웃은 사이드바 `AccountBox`(이메일 표시)로 이동
 
 ## 바로가기로 실행 (설치 파일은 아직 없음)
-- `쇼츠공방 실행.bat`(저장소 맨 위) 더블클릭 → **창 없이(숨김)** API·웹 서버를 켜고 준비되면 브라우저를 엶. 이미 켜져 있으면 브라우저만 열기 (`tools/dev/start-dev.mjs --open`). 로그는 `logs/server.log`·`server.err.log`(깃 제외). **창(브라우저)을 닫으면 서버가 스스로 꺼짐**: 화면이 `/api/heartbeat`를 20초마다 보내고(`apps/web/src/heartbeat.ts`), 신호가 3분 끊긴 채 처리 중인 요청이 없으면 API가 종료(`app/core/idle_exit.py`, 런처가 `SHORTS_AUTO_EXIT=1` 설정, `SHORTS_AUTO_IDLE_SECONDS`로 대기 시간 조절). 직접 켠 서버·테스트 서버는 `SHORTS_AUTO_EXIT`이 없으면 안 꺼짐. 렌더링 중이면 창을 닫아도 끝날 때까지 유지. 수동으로 끄려면 PC 재시작이나 작업 관리자에서 node.exe 종료. **코드를 받은 뒤(`git pull`)에는 서버를 다시 켜야 새 코드가 적용됨**(시작할 때 한 번만 읽음)
+- `쇼츠공방 실행.bat`(저장소 맨 위) 더블클릭 → **창 없이(숨김)** API·웹 서버를 켜고 준비되면 브라우저를 엶. 이미 켜져 있으면 브라우저만 열기 (`tools/dev/start-dev.mjs --open`). 로그는 `logs/server.log`·`server.err.log`(깃 제외). **창(브라우저)을 닫으면 서버가 스스로 꺼짐**: 화면이 `/api/heartbeat`를 20초마다 보내고(`apps/web/src/heartbeat.ts`), 신호가 15분 끊긴 채 처리 중인 요청이 없으면 API가 종료(`app/core/idle_exit.py`, 런처가 `SHORTS_AUTO_EXIT=1` 설정, `SHORTS_AUTO_IDLE_SECONDS`로 대기 시간 조절). 직접 켠 서버·테스트 서버는 `SHORTS_AUTO_EXIT`이 없으면 안 꺼짐. 렌더링 중이면 창을 닫아도 끝날 때까지 유지. 수동으로 끄려면 PC 재시작이나 작업 관리자에서 node.exe 종료. **코드를 받은 뒤(`git pull`)에는 서버를 다시 켜야 새 코드가 적용됨**(시작할 때 한 번만 읽음)
 - 바탕화면 바로가기는 PC마다 만들어야 함(저장소에 없음): 대상 `쇼츠공방 실행.bat`, 아이콘 `tools/dev/shorts.ico`, 실행 크기 "최소화" (PowerShell `WScript.Shell`의 `CreateShortcut`)
 - 필요한 것: Node.js, ffmpeg, `apps/api/.venv` 설치가 끝난 PC. 진짜 설치 파일(압축 풀고 바로 실행)은 배포 단계에서 따로
 

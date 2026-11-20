@@ -10,7 +10,7 @@ import os
 import threading
 import time
 
-IDLE_SECONDS = 180  # a hidden tab is throttled to about one ping a minute; a Google sign-in leaves the page for a while
+IDLE_SECONDS = 900  # browsers throttle or put hidden tabs to sleep (3 minutes was too short: the server died under an open page)
 CHECK_SECONDS = 10
 STRIKES = 3  # idle on three checks in a row, so a PC just back from sleep gets a moment to ping
 
