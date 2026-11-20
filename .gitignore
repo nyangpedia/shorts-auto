@@ -30,3 +30,5 @@ assets/bgm/*
 # Internal docs & prototype references
 docs/
 ref/
+
+logs/

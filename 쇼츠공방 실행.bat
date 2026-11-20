@@ -1,8 +1,7 @@
 @echo off
 chcp 65001 >nul
-title 쇼츠공방 (이 창을 닫으면 꺼집니다)
 cd /d "%~dp0"
-where ffmpeg >nul 2>nul || echo [경고] ffmpeg를 찾지 못했습니다. 영상 만들기가 안 될 수 있어요.
 where node >nul 2>nul || (echo Node.js가 설치되어 있지 않습니다. & pause & exit /b 1)
-node tools\dev\start-dev.mjs --open
-pause
+if not exist logs mkdir logs
+rem 창 없이 켭니다. 로그는 logs\server.log, 끄려면 PC를 재시작하거나 작업 관리자에서 node.exe를 종료하세요.
+powershell -NoProfile -WindowStyle Hidden -Command "Start-Process node -ArgumentList 'tools\dev\start-dev.mjs','--open' -WindowStyle Hidden -RedirectStandardOutput logs\server.log -RedirectStandardError logs\server.err.log"
