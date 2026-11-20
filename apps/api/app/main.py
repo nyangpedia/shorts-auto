@@ -2,6 +2,7 @@
 The factories are parameters so tests can swap in fakes for YouTube, yt-dlp, speech and LLM calls."""
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
@@ -10,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.core import usage
 from app.core.keys_router import create_keys_router
 from app.core.members import create_member_guard, lookup_member
+from app.core.idle_exit import IDLE_SECONDS, IdleExit
 from app.core.project_log import sync_projects
 from app.core.topic_log import sync_used
 from app.core.paths import find_repo_root
@@ -69,8 +71,26 @@ def create_app(
     app = FastAPI(title="Shorts Gongbang API", dependencies=[Depends(create_member_guard(settings_provider, member_lookup))])
     app.add_middleware(CORSMiddleware, allow_origins=WEB_ORIGINS, allow_credentials=True, allow_methods=["*"], allow_headers=["*"])
 
+    idle = IdleExit(enabled=os.environ.get("SHORTS_AUTO_EXIT") == "1", idle_seconds=float(os.environ.get("SHORTS_AUTO_IDLE_SECONDS") or IDLE_SECONDS))
+    if idle.enabled:
+        idle.watch()
+
+    @app.middleware("http")
+    async def count_requests_in_flight(request, call_next):
+        idle.begin()
+        try:
+            return await call_next(request)
+        finally:
+            idle.end()
+
     @app.get("/api/health")
     def health():
+        return {"ok": True}
+
+    @app.get("/api/heartbeat")
+    def heartbeat():
+        """The open page pings this; the launcher's server exits when the pings stop (core/idle_exit.py)."""
+        idle.beat()
         return {"ok": True}
 
     @app.get("/api/usage")

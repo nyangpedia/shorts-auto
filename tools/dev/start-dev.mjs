@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 // `pnpm dev`: the API (uvicorn) and the web app (Vite) side by side. Output is prefixed per service;
 // Ctrl+C, or either one exiting, stops both.
-// `--open` (the double-click launcher): open the browser once the API answers, or just open it if already running.
+// `--open` (the double-click launcher): open the browser once the API answers, or just open it if already running,
+// and let the API exit when the window has been closed for a while (core/idle_exit.py).
 import { spawn } from "node:child_process";
 import { existsSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -40,7 +41,7 @@ const relay = (name, out) => (chunk) => {
 let stopping = false;
 const children = services.map(({ name, cmd, args, cwd }) => {
   // npm is a .cmd shim on Windows, so it goes through a shell (as one string: no args to escape)
-  const child = spawn(cmd, args, { cwd, shell: cmd === "npm run dev", windowsHide: true, env: { ...process.env, PYTHONIOENCODING: "utf-8" } });
+  const child = spawn(cmd, args, { cwd, shell: cmd === "npm run dev", windowsHide: true, env: { ...process.env, PYTHONIOENCODING: "utf-8", ...(wantsBrowser ? { SHORTS_AUTO_EXIT: "1" } : {}) } });
   child.stdout.on("data", relay(name, process.stdout));
   child.stderr.on("data", relay(name, process.stderr));
   child.on("exit", (code, signal) => {
